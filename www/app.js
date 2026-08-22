@@ -109,13 +109,28 @@ $("refreshBtn").addEventListener("click",()=>{ CACHE.day=""; boot(true); });
 $("dateGo").addEventListener("click",()=>{ SELDATE=$("selDate").value||today(); CACHE.day=""; boot(true); });
 $("bell").addEventListener("click",()=>{ $("belldot").style.display="none"; notify("Commission","Total "+$("totalCom").textContent); });
 
-// ---- Load the selected day's data once, reuse for commission + risk ----
-async function loadData(force){
+// ---- Full load of the selected day (builds the seen-id sets for incremental) ----
+async function loadData(){
   const d=SELDATE;
-  if(!force && CACHE.day===d && CACHE.payins.length!=null && CACHE._env===peday.envName()) return CACHE;
   const [payins,payouts,merch] = await Promise.all([ peday.payins(d,d), peday.payouts(d,d), peday.merchants() ]);
-  CACHE={ day:d, _env:peday.envName(), payins, payouts, rates: logic.merchantRates(merch) };
+  const seenPin=new Set(payins.map(r=>r.GATEWAYTRANSACTIONID).filter(Boolean));
+  const seenPout=new Set(payouts.map(r=>r.GATEWAYTRANSACTIONID).filter(Boolean));
+  CACHE={ day:d, _env:peday.envName(), payins, payouts, rates: logic.merchantRates(merch), seenPin, seenPout };
   return CACHE;
+}
+// ---- Incremental: pull only NEW txns since last check; merge into CACHE. ----
+async function refreshNew(){
+  if(!CACHE.seenPin || CACHE.day!==SELDATE || CACHE._env!==peday.envName()) return -1; // needs full load
+  const d=SELDATE;
+  const [np,no] = await Promise.all([
+    peday.fetchNew(peday.PAYIN_PATH, d, d, CACHE.seenPin),
+    peday.fetchNew(peday.PAYOUT_PATH, d, d, CACHE.seenPout),
+  ]);
+  np.forEach(r=>{ if(r.GATEWAYTRANSACTIONID) CACHE.seenPin.add(r.GATEWAYTRANSACTIONID); });
+  no.forEach(r=>{ if(r.GATEWAYTRANSACTIONID) CACHE.seenPout.add(r.GATEWAYTRANSACTIONID); });
+  if(np.length) CACHE.payins=np.concat(CACHE.payins);
+  if(no.length) CACHE.payouts=no.concat(CACHE.payouts);
+  return np.length+no.length;
 }
 const dateLabel = () => SELDATE===today() ? "today" : SELDATE;
 
@@ -125,7 +140,12 @@ async function boot(silent){
   applyBoot();
   if(!silent) $("vendorList").innerHTML='<div class="empty"><span class="spin"></span></div>';
   try {
-    const c=await loadData(true);
+    const c = await loadData();
+    render(c);
+  } catch(e){ if(!silent) $("vendorList").innerHTML='<div class="empty">'+e.message+'</div>'; if(/sign in/i.test(e.message)){ peday.logout(); location.reload(); } }
+  finally { _busy=false; }
+}
+function render(c){
     const vc=logic.vendorCommission(c.payins,c.payouts,c.rates);
     let payin=0,payout=0,gst=0,payinTx=0,payoutTx=0,payinAmt=0,payoutAmt=0; const byV={};
     vc.forEach(x=>{ if(x.Mode==="Payin"){payin+=x.Total;payinTx+=x.Txns;payinAmt+=x.Base;} else {payout+=x.Total;payoutTx+=x.Txns;payoutAmt+=x.Base;}
@@ -144,18 +164,23 @@ async function boot(silent){
     $("lastupd").textContent="Updated "+new Date().toLocaleTimeString();
     $("barsub").textContent=peday.envName()==="spark"?"Spark · today":"Peday · today"; $("curenv").textContent=peday.envName()==="spark"?"Spark":"Peday";
     checkRisk(c);
-  } catch(e){ if(!silent) $("vendorList").innerHTML='<div class="empty">'+e.message+'</div>'; if(/sign in/i.test(e.message)){ peday.logout(); location.reload(); } }
-  finally { _busy=false; }
 }
 function applyBoot(){ paintS(); paintAuto(); if($("selDate")&&!$("selDate").value) $("selDate").value=SELDATE; if($("deviceId")) $("deviceId").textContent=devId(); if($("who")) $("who").textContent=peday.email; if(getS("alarm")) startAlarm(); startAuto(); }
 
 // Auto-refresh every 3s — live only (today), only on the dashboard, non-overlapping.
 let autoTimer=null;
-function startAuto(){ if(autoTimer||!autoOn()) return; paintAuto(); autoTimer=setInterval(()=>{
+function startAuto(){ if(autoTimer||!autoOn()) return; paintAuto(); autoTimer=setInterval(async()=>{
   if(!autoOn()||_busy) return;
   if(!$("v-dash").classList.contains("on")) return;
   if(SELDATE!==today()) return;
-  CACHE.day=""; boot(true);   // silent: no spinner flicker
+  _busy=true;
+  try {
+    const n = await refreshNew();          // light: only new txns
+    if(n===-1){ await loadData(); render(CACHE); }   // cache stale -> full load once
+    else if(n>0){ render(CACHE); }          // new txns -> re-render from cache
+    // n===0 -> nothing changed, no work
+  } catch(e){ if(/sign in/i.test(e.message)){ peday.logout(); location.reload(); } }
+  finally { _busy=false; }
 }, 3000); }
 function stopAuto(){ if(autoTimer) clearInterval(autoTimer); autoTimer=null; }
 

@@ -51,8 +51,29 @@ async function fetchAll(path, params) {
   return out;
 }
 
+// Incremental fetch: the API is newest-first, so new records are a prefix.
+// Walk pages collecting records until we hit one already in `seen`, then stop.
+async function fetchNew(path, from, to, seen) {
+  const out = []; let page = 0;
+  for (let i = 0; i < 20; i++) {
+    const d = await apiGet(path, { from, to, page, size: 500 });
+    const rows = Array.isArray(d) ? d : (d.CONTENT || d.content || []);
+    let hitSeen = false;
+    for (const r of rows) {
+      const id = r.GATEWAYTRANSACTIONID;
+      if (id && seen.has(id)) { hitSeen = true; break; }
+      out.push(r);
+    }
+    if (hitSeen || rows.length < 500) break;
+    page++;
+  }
+  return out;
+}
+
 const peday = {
-  ENVS, setEnv, envName, login, logout, isAuthed, apiGet, fetchAll, SUCCESS,
+  ENVS, setEnv, envName, login, logout, isAuthed, apiGet, fetchAll, fetchNew, SUCCESS,
+  PAYIN_PATH: "/api/v1/admin/payin-intents",
+  PAYOUT_PATH: "/api/v1/admin/payouts",
   merchants: () => apiGet("/api/v1/admin/merchants").then(d => d.CONTENT || d),
   payins: (from, to) => fetchAll("/api/v1/admin/payin-intents", { from, to }),
   payouts: (from, to) => fetchAll("/api/v1/admin/payouts", { from, to }),
