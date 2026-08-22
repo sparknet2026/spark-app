@@ -36,11 +36,18 @@ function logout() { TOKEN = ""; ["peday_token", "peday_auth"].forEach(k => local
 function forget() { logout(); ["peday_email", "peday_pw"].forEach(k => localStorage.removeItem(k)); }
 function isAuthed() { return !!TOKEN; }
 
-async function apiGet(path, params) {
+async function apiGet(path, params, _retry) {
   const url = new URL(BASE + path);
   Object.entries(params || {}).forEach(([k, v]) => v !== "" && v != null && url.searchParams.set(k, v));
   const r = await fetch(url, { headers: { Authorization: "Bearer " + TOKEN, Accept: "application/json" } });
-  if (r.status === 401) throw new Error("Session expired — sign in again");
+  if (r.status === 401) {
+    // Token lives only 15 min — silently re-login with saved creds and retry once.
+    if (!_retry) {
+      const c = savedCreds();
+      if (c.email && c.pw) { try { await login(c.email, c.pw); return apiGet(path, params, true); } catch (e) {} }
+    }
+    throw new Error("Session expired — sign in again");
+  }
   if (!r.ok) throw new Error("HTTP " + r.status);
   return r.json();
 }

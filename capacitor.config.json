@@ -11,6 +11,14 @@
   "plugins": {
     "CapacitorHttp": {
       "enabled": true
+    },
+    "BackgroundRunner": {
+      "label": "money.peday.commission.risk",
+      "src": "runner.js",
+      "event": "periodicRisk",
+      "repeat": true,
+      "interval": 10,
+      "autoStart": true
     }
   }
 }

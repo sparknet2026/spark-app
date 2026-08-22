@@ -176,7 +176,18 @@ function render(c){
     $("barsub").textContent=peday.envName()==="spark"?"Spark · today":"Peday · today"; $("curenv").textContent=peday.envName()==="spark"?"Spark":"Peday";
     checkRisk(c);
 }
-function applyBoot(){ paintS(); paintAuto(); if($("selDate")&&!$("selDate").value) $("selDate").value=SELDATE; if($("deviceId")) $("deviceId").textContent=devId(); if($("who")) $("who").textContent=peday.email; if(getS("alarm")) startAlarm(); startAuto(); }
+function applyBoot(){ paintS(); paintAuto(); if($("selDate")&&!$("selDate").value) $("selDate").value=SELDATE; if($("deviceId")) $("deviceId").textContent=devId(); if($("who")) $("who").textContent=peday.email; if(getS("alarm")) startAlarm(); startAuto(); seedRunner(); }
+// Seed the background task with credentials so it can run risk checks when the app
+// is closed (~every 10-15 min, OS-limited). Uses the saved login; no server needed.
+async function seedRunner(){
+  try{
+    const BR=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.BackgroundRunner;
+    if(!BR) return;
+    const c=peday.savedCreds(); if(!c.email||!c.pw) return;
+    await BR.dispatchEvent({ label:"money.peday.commission.risk", event:"saveCreds",
+      details:{ email:c.email, pw:c.pw, base:peday.ENVS[peday.envName()] } });
+  }catch(e){}
+}
 
 // Auto-refresh every 3s — live only (today), only on the dashboard, non-overlapping.
 let autoTimer=null, _curCom=0, _curTx=0;
