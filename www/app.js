@@ -186,12 +186,33 @@ function stopAuto(){ if(autoTimer) clearInterval(autoTimer); autoTimer=null; }
 
 // ---- Risk ----
 let LAST_RISK=[];
+// Stable identity for a flag, so "ignore" persists across refreshes.
+const flagKey=f=>`${f.Rule}|${f.Entity}|${f.Date}|${f.Mode}`;
+function ignoredSet(){ try{ return new Set(JSON.parse(localStorage.getItem("peday_ignored"))||[]); }catch(e){ return new Set(); } }
+function saveIgnored(s){ localStorage.setItem("peday_ignored", JSON.stringify([...s])); }
+function ignoreFlag(k){ const s=ignoredSet(); s.add(k); saveIgnored(s); renderRisk(); const a=activeRisk(); $("riskdot").style.display=a.length?"block":"none"; }
+function unignoreFlag(k){ const s=ignoredSet(); s.delete(k); saveIgnored(s); renderRisk(); }
+const activeRisk=()=>{ const ig=ignoredSet(); return LAST_RISK.filter(f=>!ig.has(flagKey(f))); };
+
 function checkRisk(c){ LAST_RISK=logic.riskScan(c.payins,c.payouts,logic.getRules());
-  if(LAST_RISK.length){ $("riskdot").style.display="block"; if(getS("risk")) notify("⚠ Risk alert",LAST_RISK.length+" transaction(s) flagged today",true); } }
+  const active=activeRisk();
+  if(active.length){ $("riskdot").style.display="block"; if(getS("risk")) notify("⚠ Risk alert",active.length+" transaction(s) flagged today",true); }
+  else $("riskdot").style.display="none";
+}
 function renderRisk(){
-  const rows=LAST_RISK; $("riskCount").textContent=rows.length+" flags"; $("riskCount").className="pill "+(rows.length?"p-bad":"p-ok");
+  const ig=ignoredSet(); const active=LAST_RISK.filter(f=>!ig.has(flagKey(f))); const ignored=LAST_RISK.filter(f=>ig.has(flagKey(f)));
+  $("riskCount").textContent=active.length+" flags"; $("riskCount").className="pill "+(active.length?"p-bad":"p-ok");
   const sev=s=>s==="High"?"p-bad":(s==="Medium"?"p-warn":"p-ok");
-  $("riskList").innerHTML=rows.length?rows.map(x=>`<div class="rowline"><div class="l">${x.Rule}<small>${x.Entity} · ${x.Merchant||""} · ${x.Detail||""}</small></div><div class="r"><span class="pill ${sev(x.Severity)}">${x.Severity}</span></div></div>`).join(""):'<div class="empty">✓ No risk flags today.</div>';
+  const row=(x,isIg)=>{ const k=flagKey(x).replace(/"/g,"&quot;");
+    const btn=isIg?`<button class="btn2" data-unign="${k}" style="padding:5px 9px;font-size:11px">Unignore</button>`
+                  :`<button class="btn2" data-ign="${k}" style="padding:5px 9px;font-size:11px">Ignore</button>`;
+    return `<div class="rowline" style="${isIg?'opacity:.5':''}"><div class="l">${x.Rule}<small>${x.Entity} · ${x.Merchant||""} · ${x.Detail||""}</small></div>
+      <div class="r" style="display:flex;gap:6px;align-items:center"><span class="pill ${sev(x.Severity)}">${x.Severity}</span>${btn}</div></div>`; };
+  let html = active.length?active.map(x=>row(x,false)).join(""):'<div class="empty">✓ No active risk flags.</div>';
+  if(ignored.length) html += `<div class="muted" style="margin:10px 0 4px;font-weight:700">Ignored (${ignored.length})</div>` + ignored.map(x=>row(x,true)).join("");
+  $("riskList").innerHTML=html;
+  $("riskList").querySelectorAll("[data-ign]").forEach(b=>b.onclick=()=>ignoreFlag(b.getAttribute("data-ign")));
+  $("riskList").querySelectorAll("[data-unign]").forEach(b=>b.onclick=()=>unignoreFlag(b.getAttribute("data-unign")));
 }
 
 // ---- Wallet ----
