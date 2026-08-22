@@ -1,0 +1,7 @@
+{
+  "appId": "money.peday.commission",
+  "appName": "Peday Commission",
+  "webDir": "www",
+  "server": { "androidScheme": "https" },
+  "android": { "allowMixedContent": false }
+}

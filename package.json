@@ -1,0 +1,19 @@
+{
+  "name": "peday-commission-app",
+  "version": "1.0.0",
+  "description": "Peday Commission & Risk Monitor — native Android app (backend-less, talks to peday directly).",
+  "private": true,
+  "scripts": {
+    "add:android": "cap add android",
+    "sync": "cap sync android",
+    "open:android": "cap open android",
+    "build:apk": "cd android && gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/android": "^6.1.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  }
+}
