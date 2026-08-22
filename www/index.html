@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#2d5bd7">
-<title>Peday Commission</title>
+<title>Spark Pay</title>
 <style>
   :root { --bg:#f4f6fa; --card:#fff; --ink:#141824; --muted:#6b7688; --line:#e6e9ef;
     --brand:#2d5bd7; --brand2:#3f6fe6; --ok-bg:#e7f6ec; --ok:#0f7a43; --bad-bg:#fdecea; --bad:#c0261c;
@@ -55,15 +55,15 @@
 </style>
 </head>
 <body>
-<div id="splash"><div class="mark">₹</div><div class="nm">Peday Commission</div><div class="ld"></div></div>
+<div id="splash"><div class="mark">₹</div><div class="nm">Spark Pay</div><div class="ld"></div></div>
 
 <div id="login">
   <div class="box">
     <div class="logo">₹</div>
-    <h1>Peday Commission</h1>
-    <p>Sign in with your peday admin account</p>
+    <h1>Spark Pay</h1>
+    <p>Sign in with your Spark Pay admin account</p>
     <div class="loginerr" id="loginerr"></div>
-    <div class="fld"><label>Environment</label><select id="lenv"><option value="peday">Peday</option><option value="spark">Spark</option></select></div>
+    <div class="fld"><label>Environment</label><select id="lenv"><option value="spark">Spark</option><option value="peday">Peday</option></select></div>
     <div class="fld"><label>Email</label><input id="lu" type="email" placeholder="admin@…" autocomplete="username"></div>
     <div class="fld"><label>Password</label><input id="lp" type="password" autocomplete="current-password"></div>
     <button class="btn" id="loginbtn">Sign in</button>
@@ -76,7 +76,7 @@
     <button class="iconbtn" id="bell">🔔<span class="dot" id="belldot"></span></button></div>
   <div class="body">
     <div class="view on" id="v-dash">
-      <div class="seg" id="envseg"><button data-env="peday" class="on">Peday</button><button data-env="spark">Spark</button></div>
+      <div class="seg" id="envseg"><button data-env="spark" class="on">Spark</button><button data-env="peday">Peday</button></div>
       <div class="card hero"><h3>Commission (today)</h3><div class="big" id="totalCom">—</div>
         <div class="split"><div class="s"><div class="k">Payin</div><div class="v" id="payinCom">—</div></div>
         <div class="s"><div class="k">Payout</div><div class="v" id="payoutCom">—</div></div>
@@ -109,7 +109,7 @@
         <div class="toggle" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)"><div><b>Voice alarm 🔊</b></div><div class="sw" id="voiceSw"></div></div>
         <button class="btn sec" id="voiceTest" style="margin-top:14px">Test alarm</button></div>
       <button class="btn" id="logoutBtn" style="background:var(--bad)">Sign out</button>
-      <div class="footer"><div class="flogo"><span class="m">₹</span> Peday Payments</div><div class="fsub">Commission & Risk Monitor · v1.0</div><div class="fsub">© 2026 Peday · Powered by Peday Tech</div></div>
+      <div class="footer"><div class="flogo"><span class="m">₹</span> Spark Pay</div><div class="fsub">Commission & Risk Monitor · v1.0</div><div class="fsub">© 2026 Spark Pay · Powered by SparkNet</div></div>
     </div>
   </div>
   <div class="nav">

@@ -1,7 +1,11 @@
 {
   "appId": "money.peday.commission",
-  "appName": "Peday Commission",
+  "appName": "Spark Pay",
   "webDir": "www",
-  "server": { "androidScheme": "https" },
-  "android": { "allowMixedContent": false }
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
 }
