@@ -17,6 +17,10 @@ async function toggleS(n){ const on=!getS(n);
   localStorage.setItem(SET[n],on?"1":"0"); paintS(); if(n==="alarm"){ on?startAlarm():stopAlarm(); } toast(n+(on?" on":" off")); }
 ["notif","risk","voice"].forEach(n=>{ const el=$(n+"Sw"); if(el) el.addEventListener("click",()=>toggleS(n)); });
 ["alarmSw"].forEach(id=>{ const el=$(id); if(el) el.addEventListener("click",()=>toggleS("alarm")); });
+// Live 3s auto-refresh — default ON (disabled only when explicitly set to "0").
+const autoOn=()=>localStorage.getItem("peday_auto")!=="0";
+function paintAuto(){ if($("autoSw")) $("autoSw").classList.toggle("on",autoOn()); }
+if($("autoSw")) $("autoSw").addEventListener("click",()=>{ const on=!autoOn(); localStorage.setItem("peday_auto",on?"1":"0"); paintAuto(); toast("Live refresh "+(on?"on":"off")); on?startAuto():stopAuto(); });
 $("voiceTest").addEventListener("click",()=>notify("⚠ Risk alert test","Same account 6 transactions in one day flagged",true));
 
 // Native local notification plugin (fires on the device, even in the WebView).
@@ -115,9 +119,11 @@ async function loadData(force){
 }
 const dateLabel = () => SELDATE===today() ? "today" : SELDATE;
 
-async function boot(){
+let _busy=false;
+async function boot(silent){
+  if(_busy) return; _busy=true;
   applyBoot();
-  $("vendorList").innerHTML='<div class="empty"><span class="spin"></span></div>';
+  if(!silent) $("vendorList").innerHTML='<div class="empty"><span class="spin"></span></div>';
   try {
     const c=await loadData(true);
     const vc=logic.vendorCommission(c.payins,c.payouts,c.rates);
@@ -138,9 +144,20 @@ async function boot(){
     $("lastupd").textContent="Updated "+new Date().toLocaleTimeString();
     $("barsub").textContent=peday.envName()==="spark"?"Spark · today":"Peday · today"; $("curenv").textContent=peday.envName()==="spark"?"Spark":"Peday";
     checkRisk(c);
-  } catch(e){ $("vendorList").innerHTML='<div class="empty">'+e.message+'</div>'; if(/sign in/i.test(e.message)){ peday.logout(); location.reload(); } }
+  } catch(e){ if(!silent) $("vendorList").innerHTML='<div class="empty">'+e.message+'</div>'; if(/sign in/i.test(e.message)){ peday.logout(); location.reload(); } }
+  finally { _busy=false; }
 }
-function applyBoot(){ paintS(); if($("selDate")&&!$("selDate").value) $("selDate").value=SELDATE; if($("deviceId")) $("deviceId").textContent=devId(); if($("who")) $("who").textContent=peday.email; if(getS("alarm")) startAlarm(); }
+function applyBoot(){ paintS(); paintAuto(); if($("selDate")&&!$("selDate").value) $("selDate").value=SELDATE; if($("deviceId")) $("deviceId").textContent=devId(); if($("who")) $("who").textContent=peday.email; if(getS("alarm")) startAlarm(); startAuto(); }
+
+// Auto-refresh every 3s — live only (today), only on the dashboard, non-overlapping.
+let autoTimer=null;
+function startAuto(){ if(autoTimer||!autoOn()) return; paintAuto(); autoTimer=setInterval(()=>{
+  if(!autoOn()||_busy) return;
+  if(!$("v-dash").classList.contains("on")) return;
+  if(SELDATE!==today()) return;
+  CACHE.day=""; boot(true);   // silent: no spinner flicker
+}, 3000); }
+function stopAuto(){ if(autoTimer) clearInterval(autoTimer); autoTimer=null; }
 
 // ---- Risk ----
 let LAST_RISK=[];
