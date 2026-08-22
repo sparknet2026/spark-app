@@ -28,22 +28,55 @@ async function ensureNotifPerm(){
   if("Notification"in window){ const p = await Notification.requestPermission(); return p === "granted"; }
   return false;
 }
+// LOUD alarm siren — alternating tones at high gain, plus device vibration.
+let _ac = null;
+function playAlarm(cycles){
+  try {
+    _ac = _ac || new (window.AudioContext || window.webkitAudioContext)();
+    if (_ac.state === "suspended") _ac.resume();
+    const now = _ac.currentTime; cycles = cycles || 6;
+    for (let i = 0; i < cycles; i++) {
+      const o = _ac.createOscillator(), g = _ac.createGain();
+      o.type = "square"; o.connect(g); g.connect(_ac.destination);
+      const t = now + i * 0.34;
+      o.frequency.setValueAtTime(i % 2 ? 1250 : 850, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.9, t + 0.03);   // loud
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+      o.start(t); o.stop(t + 0.32);
+    }
+  } catch (e) {}
+  try { if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]); } catch (e) {}
+}
+function speakLoud(text, times){
+  if (!("speechSynthesis" in window)) return;
+  try {
+    speechSynthesis.cancel();
+    for (let i = 0; i < (times || 1); i++) {
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.98; u.pitch = 1; u.volume = 1;      // full volume
+      speechSynthesis.speak(u);
+    }
+  } catch (e) {}
+}
 function notify(title,body,urgent){
   if(!getS("notif")){ toast(title+" — "+body); return; }
   const ln = LN();
   if(ln){ // real device notification
-    ln.schedule({ notifications:[{ id:_nid++, title, body, smallIcon:"ic_launcher", schedule:{ at:new Date(Date.now()+200) } }] }).catch(()=>toast(title+" — "+body));
+    ln.schedule({ notifications:[{ id:_nid++, title, body, smallIcon:"ic_launcher",
+      sound: urgent ? "default" : undefined, schedule:{ at:new Date(Date.now()+200) } }] }).catch(()=>toast(title+" — "+body));
   } else if("Notification"in window&&Notification.permission==="granted"){ new Notification(title,{body}); }
   else toast(title+" — "+body);
-  if(getS("voice")&&"speechSynthesis"in window){ try{
-    if(urgent){ const ac=new(window.AudioContext||window.webkitAudioContext)(); const o=ac.createOscillator(),g=ac.createGain(); o.connect(g);g.connect(ac.destination); o.frequency.value=880;o.start();g.gain.setValueAtTime(.2,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.4);o.stop(ac.currentTime+.4);}
-    const u=new SpeechSynthesisUtterance(title+". "+body); u.rate=.95; speechSynthesis.cancel(); speechSynthesis.speak(u);
-  }catch(e){} }
+  // Urgent (risk) → loud siren; speak twice at full volume when voice is on.
+  if(urgent) playAlarm(getS("risk") ? 8 : 6);
+  if(getS("voice")) speakLoud(title + ". " + body, urgent ? 2 : 1);
 }
 
 // ---- Login ----
 $("loginbtn").addEventListener("click", async () => {
   const btn=$("loginbtn"), err=$("loginerr"); err.style.display="none";
+  // Unlock audio on this user gesture so the alarm can sound from later background checks.
+  try{ _ac=_ac||new(window.AudioContext||window.webkitAudioContext)(); _ac.resume(); }catch(e){}
   peday.setEnv($("lenv").value);
   btn.disabled=true; btn.textContent="Signing in…";
   try {
