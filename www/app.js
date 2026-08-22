@@ -13,15 +13,27 @@ const SET={notif:"peday_notif",risk:"peday_risk",voice:"peday_voice",alarm:"peda
 const getS=n=>localStorage.getItem(SET[n])==="1";
 function paintS(){ Object.keys(SET).forEach(n=>{ const el=$(n+"Sw"); if(el) el.classList.toggle("on",getS(n)); }); if($("alarmSw")) $("alarmSw").classList.toggle("on",getS("alarm")); }
 async function toggleS(n){ const on=!getS(n);
-  if(on&&n==="notif"&&"Notification"in window&&Notification.permission!=="granted"){ const p=await Notification.requestPermission(); if(p!=="granted"){toast("Permission denied");return;} }
+  if(on&&n==="notif"){ const ok=await ensureNotifPerm(); if(!ok){toast("Notification permission denied");return;} }
   localStorage.setItem(SET[n],on?"1":"0"); paintS(); if(n==="alarm"){ on?startAlarm():stopAlarm(); } toast(n+(on?" on":" off")); }
 ["notif","risk","voice"].forEach(n=>{ const el=$(n+"Sw"); if(el) el.addEventListener("click",()=>toggleS(n)); });
 ["alarmSw"].forEach(id=>{ const el=$(id); if(el) el.addEventListener("click",()=>toggleS("alarm")); });
 $("voiceTest").addEventListener("click",()=>notify("⚠ Risk alert test","Same account 6 transactions in one day flagged",true));
 
+// Native local notification plugin (fires on the device, even in the WebView).
+const LN = () => (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications) || null;
+let _nid = 1;
+async function ensureNotifPerm(){
+  const ln = LN();
+  if(ln){ try{ const p = await ln.requestPermissions(); return p.display === "granted"; }catch(e){ return false; } }
+  if("Notification"in window){ const p = await Notification.requestPermission(); return p === "granted"; }
+  return false;
+}
 function notify(title,body,urgent){
   if(!getS("notif")){ toast(title+" — "+body); return; }
-  if("Notification"in window&&Notification.permission==="granted") new Notification(title,{body});
+  const ln = LN();
+  if(ln){ // real device notification
+    ln.schedule({ notifications:[{ id:_nid++, title, body, smallIcon:"ic_launcher", schedule:{ at:new Date(Date.now()+200) } }] }).catch(()=>toast(title+" — "+body));
+  } else if("Notification"in window&&Notification.permission==="granted"){ new Notification(title,{body}); }
   else toast(title+" — "+body);
   if(getS("voice")&&"speechSynthesis"in window){ try{
     if(urgent){ const ac=new(window.AudioContext||window.webkitAudioContext)(); const o=ac.createOscillator(),g=ac.createGain(); o.connect(g);g.connect(ac.destination); o.frequency.value=880;o.start();g.gain.setValueAtTime(.2,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.4);o.stop(ac.currentTime+.4);}
@@ -72,12 +84,13 @@ async function boot(){
   try {
     const c=await loadData(true);
     const vc=logic.vendorCommission(c.payins,c.payouts,c.rates);
-    let payin=0,payout=0,gst=0,payinTx=0,payoutTx=0; const byV={};
-    vc.forEach(x=>{ if(x.Mode==="Payin"){payin+=x.Total;payinTx+=x.Txns;} else {payout+=x.Total;payoutTx+=x.Txns;}
+    let payin=0,payout=0,gst=0,payinTx=0,payoutTx=0,payinAmt=0,payoutAmt=0; const byV={};
+    vc.forEach(x=>{ if(x.Mode==="Payin"){payin+=x.Total;payinTx+=x.Txns;payinAmt+=x.Base;} else {payout+=x.Total;payoutTx+=x.Txns;payoutAmt+=x.Base;}
       gst+=x.GST; (byV[x.Vendor]=byV[x.Vendor]||{name:x.VendorName,payin:0,payout:0,total:0});
       if(x.Mode==="Payin")byV[x.Vendor].payin+=x.Total; else byV[x.Vendor].payout+=x.Total; byV[x.Vendor].total+=x.Total; });
     $("totalCom").textContent=inr(payin+payout); $("payinCom").textContent=inr(payin); $("payoutCom").textContent=inr(payout); $("gstCom").textContent=inr(gst);
     $("payinTx").textContent=payinTx.toLocaleString("en-IN"); $("payoutTx").textContent=payoutTx.toLocaleString("en-IN"); $("totalTx").textContent=(payinTx+payoutTx).toLocaleString("en-IN");
+    $("payinAmt").textContent=inr(payinAmt); $("payoutAmt").textContent=inr(payoutAmt); $("totalAmt").textContent=inr(payinAmt+payoutAmt);
     const items=Object.entries(byV).sort((a,b)=>b[1].total-a[1].total);
     $("vendorList").innerHTML=items.length?items.map(([code,v])=>`<div class="rowline"><div class="l">${code}<small>${v.name||""} · <span style="color:var(--ok)">in ${inr(v.payin)}</span> · <span style="color:var(--brand)">out ${inr(v.payout)}</span></small></div><div class="r">${inr(v.total)}</div></div>`).join(""):'<div class="empty">No commission today.</div>';
     $("lastupd").textContent="Updated "+new Date().toLocaleTimeString();
