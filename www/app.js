@@ -99,17 +99,21 @@ document.querySelectorAll(".nav button").forEach(b=>b.addEventListener("click",(
 }));
 // Environment is fixed at login (its token is env-specific). To switch, sign out
 // and sign in to the other environment — this keeps the data from ever mixing.
+// Selected date for the whole dashboard (defaults to today, changeable via filter).
+let SELDATE = today();
 $("refreshBtn").addEventListener("click",()=>{ CACHE.day=""; boot(true); });
+$("dateGo").addEventListener("click",()=>{ SELDATE=$("selDate").value||today(); CACHE.day=""; boot(true); });
 $("bell").addEventListener("click",()=>{ $("belldot").style.display="none"; notify("Commission","Total "+$("totalCom").textContent); });
 
-// ---- Load today's data once, reuse for commission + risk ----
+// ---- Load the selected day's data once, reuse for commission + risk ----
 async function loadData(force){
-  if(!force && CACHE.day===today() && CACHE.payins.length!=null && CACHE._env===peday.envName()) return CACHE;
-  const d=today();
+  const d=SELDATE;
+  if(!force && CACHE.day===d && CACHE.payins.length!=null && CACHE._env===peday.envName()) return CACHE;
   const [payins,payouts,merch] = await Promise.all([ peday.payins(d,d), peday.payouts(d,d), peday.merchants() ]);
   CACHE={ day:d, _env:peday.envName(), payins, payouts, rates: logic.merchantRates(merch) };
   return CACHE;
 }
+const dateLabel = () => SELDATE===today() ? "today" : SELDATE;
 
 async function boot(){
   applyBoot();
@@ -119,19 +123,24 @@ async function boot(){
     const vc=logic.vendorCommission(c.payins,c.payouts,c.rates);
     let payin=0,payout=0,gst=0,payinTx=0,payoutTx=0,payinAmt=0,payoutAmt=0; const byV={};
     vc.forEach(x=>{ if(x.Mode==="Payin"){payin+=x.Total;payinTx+=x.Txns;payinAmt+=x.Base;} else {payout+=x.Total;payoutTx+=x.Txns;payoutAmt+=x.Base;}
-      gst+=x.GST; (byV[x.Vendor]=byV[x.Vendor]||{name:x.VendorName,payin:0,payout:0,total:0});
-      if(x.Mode==="Payin")byV[x.Vendor].payin+=x.Total; else byV[x.Vendor].payout+=x.Total; byV[x.Vendor].total+=x.Total; });
+      gst+=x.GST; const v=(byV[x.Vendor]=byV[x.Vendor]||{name:x.VendorName,pinAmt:0,poutAmt:0,pinCom:0,poutCom:0});
+      if(x.Mode==="Payin"){v.pinAmt+=x.Base;v.pinCom+=x.Total;} else {v.poutAmt+=x.Base;v.poutCom+=x.Total;} });
     $("totalCom").textContent=inr(payin+payout); $("payinCom").textContent=inr(payin); $("payoutCom").textContent=inr(payout); $("gstCom").textContent=inr(gst);
     $("payinTx").textContent=payinTx.toLocaleString("en-IN"); $("payoutTx").textContent=payoutTx.toLocaleString("en-IN"); $("totalTx").textContent=(payinTx+payoutTx).toLocaleString("en-IN");
     $("payinAmt").textContent=inr(payinAmt); $("payoutAmt").textContent=inr(payoutAmt); $("totalAmt").textContent=inr(payinAmt+payoutAmt);
-    const items=Object.entries(byV).sort((a,b)=>b[1].total-a[1].total);
-    $("vendorList").innerHTML=items.length?items.map(([code,v])=>`<div class="rowline"><div class="l">${code}<small>${v.name||""} · <span style="color:var(--ok)">in ${inr(v.payin)}</span> · <span style="color:var(--brand)">out ${inr(v.payout)}</span></small></div><div class="r">${inr(v.total)}</div></div>`).join(""):'<div class="empty">No commission today.</div>';
+    $("comTitle").textContent="Commission · "+dateLabel(); $("txnTitle").textContent="Transactions · "+dateLabel();
+    const items=Object.entries(byV).map(([c,v])=>[c,{...v,amt:v.pinAmt+v.poutAmt,com:v.pinCom+v.poutCom}]).sort((a,b)=>b[1].amt-a[1].amt);
+    $("vendorList").innerHTML=items.length?items.map(([code,v])=>`<div class="rowline">
+      <div class="l">${code} <small style="display:inline;color:var(--muted)">${v.name||""}</small>
+        <small>trx <b>${inr(v.amt)}</b> · comm <b>${inr(v.com)}</b></small>
+        <small><span style="color:var(--ok)">in: ${inr(v.pinAmt)} / ${inr(v.pinCom)}</span> · <span style="color:var(--brand)">out: ${inr(v.poutAmt)} / ${inr(v.poutCom)}</span></small></div>
+      <div class="r">${inr(v.com)}</div></div>`).join(""):'<div class="empty">No data for '+dateLabel()+'.</div>';
     $("lastupd").textContent="Updated "+new Date().toLocaleTimeString();
     $("barsub").textContent=peday.envName()==="spark"?"Spark · today":"Peday · today"; $("curenv").textContent=peday.envName()==="spark"?"Spark":"Peday";
     checkRisk(c);
   } catch(e){ $("vendorList").innerHTML='<div class="empty">'+e.message+'</div>'; if(/sign in/i.test(e.message)){ peday.logout(); location.reload(); } }
 }
-function applyBoot(){ paintS(); if($("deviceId")) $("deviceId").textContent=devId(); if($("who")) $("who").textContent=peday.email; if(getS("alarm")) startAlarm(); }
+function applyBoot(){ paintS(); if($("selDate")&&!$("selDate").value) $("selDate").value=SELDATE; if($("deviceId")) $("deviceId").textContent=devId(); if($("who")) $("who").textContent=peday.email; if(getS("alarm")) startAlarm(); }
 
 // ---- Risk ----
 let LAST_RISK=[];
