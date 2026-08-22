@@ -42,8 +42,16 @@ jobs:
         run: |
           cd android
           chmod +x ./gradlew
-          set -o pipefail
-          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee ../build.log
+          set +e
+          ./gradlew assembleDebug --no-daemon --stacktrace > ../build.log 2>&1
+          code=$?
+          if [ $code -ne 0 ]; then
+            echo "===== GRADLE FAILURE (tail) ====="
+            tail -80 ../build.log
+            msg=$(grep -A3 -iE "what went wrong|FAILURE:|Could not|not found|Unresolved|Duplicate class|Manifest merger" ../build.log | head -12 | tr '\n' '~' | tr -d '\r' | cut -c1-800)
+            echo "::error::$msg"
+          fi
+          exit $code
 
       - name: Upload build log
         if: always()
