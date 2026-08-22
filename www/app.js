@@ -108,6 +108,8 @@ let SELDATE = today();
 $("refreshBtn").addEventListener("click",()=>{ CACHE.day=""; boot(true); });
 $("dateGo").addEventListener("click",()=>{ SELDATE=$("selDate").value||today(); CACHE.day=""; boot(true); });
 $("bell").addEventListener("click",()=>{ $("belldot").style.display="none"; notify("Commission","Total "+$("totalCom").textContent); });
+$("sheetClose").onclick=()=>$("sheet").classList.remove("on");
+$("sheet").onclick=e=>{ if(e.target.id==="sheet") $("sheet").classList.remove("on"); };
 
 // ---- Full load of the selected day (builds the seen-id sets for incremental) ----
 async function loadData(){
@@ -199,20 +201,38 @@ function checkRisk(c){ LAST_RISK=logic.riskScan(c.payins,c.payouts,logic.getRule
   if(active.length){ $("riskdot").style.display="block"; if(getS("risk")) notify("⚠ Risk alert",active.length+" transaction(s) flagged today",true); }
   else $("riskdot").style.display="none";
 }
+let _riskIndex={};
 function renderRisk(){
-  const ig=ignoredSet(); const active=LAST_RISK.filter(f=>!ig.has(flagKey(f))); const ignored=LAST_RISK.filter(f=>ig.has(flagKey(f)));
+  const ig=ignoredSet();
+  const byLatest=(a,b)=>String(b.Time||b.Date||"").localeCompare(String(a.Time||a.Date||"")); // newest first
+  const active=LAST_RISK.filter(f=>!ig.has(flagKey(f))).sort(byLatest);
+  const ignored=LAST_RISK.filter(f=>ig.has(flagKey(f))).sort(byLatest);
   $("riskCount").textContent=active.length+" flags"; $("riskCount").className="pill "+(active.length?"p-bad":"p-ok");
   const sev=s=>s==="High"?"p-bad":(s==="Medium"?"p-warn":"p-ok");
+  _riskIndex={}; LAST_RISK.forEach(f=>_riskIndex[flagKey(f)]=f);
   const row=(x,isIg)=>{ const k=flagKey(x).replace(/"/g,"&quot;");
     const btn=isIg?`<button class="btn2" data-unign="${k}" style="padding:5px 9px;font-size:11px">Unignore</button>`
                   :`<button class="btn2" data-ign="${k}" style="padding:5px 9px;font-size:11px">Ignore</button>`;
-    return `<div class="rowline" style="${isIg?'opacity:.5':''}"><div class="l">${x.Rule}<small>${x.Entity} · ${x.Merchant||""} · ${x.Detail||""}</small></div>
-      <div class="r" style="display:flex;gap:6px;align-items:center"><span class="pill ${sev(x.Severity)}">${x.Severity}</span>${btn}</div></div>`; };
+    const t=x.Time&&x.Time.length>10?" · "+x.Time.slice(11,16):"";
+    const md=x.Mode?` · <b>${x.Mode}</b>`:"";
+    return `<div class="rowline" style="${isIg?'opacity:.5':''}" data-flag="${k}"><div class="l" style="cursor:pointer">${x.Rule} <span class="pill ${sev(x.Severity)}">${x.Severity}</span><small>${x.Entity} · ${x.Merchant||""}${md} · ${x.Count} trx${t}</small><small style="color:var(--brand)">tap to see ${x.Count} transactions ▸</small></div>
+      <div class="r" style="display:flex;gap:6px;align-items:center">${btn}</div></div>`; };
   let html = active.length?active.map(x=>row(x,false)).join(""):'<div class="empty">✓ No active risk flags.</div>';
   if(ignored.length) html += `<div class="muted" style="margin:10px 0 4px;font-weight:700">Ignored (${ignored.length})</div>` + ignored.map(x=>row(x,true)).join("");
   $("riskList").innerHTML=html;
-  $("riskList").querySelectorAll("[data-ign]").forEach(b=>b.onclick=()=>ignoreFlag(b.getAttribute("data-ign")));
-  $("riskList").querySelectorAll("[data-unign]").forEach(b=>b.onclick=()=>unignoreFlag(b.getAttribute("data-unign")));
+  $("riskList").querySelectorAll("[data-ign]").forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreFlag(b.getAttribute("data-ign"));});
+  $("riskList").querySelectorAll("[data-unign]").forEach(b=>b.onclick=e=>{e.stopPropagation();unignoreFlag(b.getAttribute("data-unign"));});
+  $("riskList").querySelectorAll("[data-flag] .l").forEach(el=>el.onclick=()=>showFlag(el.parentElement.getAttribute("data-flag")));
+}
+// Flag detail sheet: list the flagged transactions + their total.
+function showFlag(k){
+  const f=_riskIndex[k]; if(!f) return;
+  const rows=(f.Rows||[]).slice().sort((a,b)=>String(b.time||"").localeCompare(String(a.time||"")));
+  const total=rows.reduce((s,r)=>s+(r.amount||0),0);
+  $("sheetTitle").textContent=f.Rule+" — "+f.Entity;
+  $("sheetSub").textContent=`${f.Count} transactions · total ${inr(total)}`;
+  $("sheetBody").innerHTML=rows.map(r=>`<div class="rowline"><div class="l">${r.name||r.account||r.mobile||"—"}<small>${r.id||""} · ${(r.time||"").slice(0,16).replace("T"," ")} · ${r.mode} · ${r.status}</small></div><div class="r">${inr(r.amount)}</div></div>`).join("")||'<div class="empty">No transactions.</div>';
+  $("sheet").classList.add("on");
 }
 
 // ---- Wallet ----
