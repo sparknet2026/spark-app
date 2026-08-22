@@ -21,10 +21,19 @@ async function login(email, password) {
   const tok = d.ACCESSTOKEN || d.accessToken;
   if (!r.ok || !tok) throw new Error(d.MESSAGE || d.message || "Invalid credentials");
   TOKEN = tok; localStorage.setItem("peday_token", tok);
+  // Remember credentials on this device for auto sign-in (base64, per-device).
   localStorage.setItem("peday_email", email);
+  try { localStorage.setItem("peday_pw", btoa(unescape(encodeURIComponent(password)))); } catch (e) {}
   return tok;
 }
+function savedCreds() {
+  const email = localStorage.getItem("peday_email") || "";
+  let pw = ""; try { pw = decodeURIComponent(escape(atob(localStorage.getItem("peday_pw") || ""))); } catch (e) {}
+  return { email, pw };
+}
+// logout keeps the token; "forget" clears saved credentials too.
 function logout() { TOKEN = ""; ["peday_token", "peday_auth"].forEach(k => localStorage.removeItem(k)); }
+function forget() { logout(); ["peday_email", "peday_pw"].forEach(k => localStorage.removeItem(k)); }
 function isAuthed() { return !!TOKEN; }
 
 async function apiGet(path, params) {
@@ -71,7 +80,7 @@ async function fetchNew(path, from, to, seen) {
 }
 
 const peday = {
-  ENVS, setEnv, envName, login, logout, isAuthed, apiGet, fetchAll, fetchNew, SUCCESS,
+  ENVS, setEnv, envName, login, logout, forget, isAuthed, savedCreds, apiGet, fetchAll, fetchNew, SUCCESS,
   PAYIN_PATH: "/api/v1/admin/payin-intents",
   PAYOUT_PATH: "/api/v1/admin/payouts",
   merchants: () => apiGet("/api/v1/admin/merchants").then(d => d.CONTENT || d),

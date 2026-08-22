@@ -91,8 +91,16 @@ $("loginbtn").addEventListener("click", async () => {
   } catch(e){ err.textContent=e.message; err.style.display="block"; }
   finally { btn.disabled=false; btn.textContent="Sign in"; }
 });
-$("logoutBtn").addEventListener("click", () => { peday.logout(); location.reload(); });
+$("logoutBtn").addEventListener("click", () => { peday.forget(); location.reload(); });
 if (localStorage.getItem("peday_auth")==="1" && peday.isAuthed()) { $("login").style.display="none"; $("app").style.display="flex"; }
+else {
+  // Not signed in: pre-fill saved credentials and auto sign-in if we have them.
+  const c=peday.savedCreds();
+  if(c.email) $("lu").value=c.email;
+  if(c.pw) $("lp").value=c.pw;
+  if($("lenv")) $("lenv").value=peday.envName();
+  if(c.email && c.pw) setTimeout(()=>$("loginbtn").click(), 100);
+}
 
 // ---- Nav ----
 document.querySelectorAll(".nav button").forEach(b=>b.addEventListener("click",()=>{
