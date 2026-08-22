@@ -153,6 +153,7 @@ function render(c){
     vc.forEach(x=>{ if(x.Mode==="Payin"){payin+=x.Total;payinTx+=x.Txns;payinAmt+=x.Base;} else {payout+=x.Total;payoutTx+=x.Txns;payoutAmt+=x.Base;}
       gst+=x.GST; const v=(byV[x.Vendor]=byV[x.Vendor]||{name:x.VendorName,pinAmt:0,poutAmt:0,pinCom:0,poutCom:0});
       if(x.Mode==="Payin"){v.pinAmt+=x.Base;v.pinCom+=x.Total;} else {v.poutAmt+=x.Base;v.poutCom+=x.Total;} });
+    _curCom=payin+payout; _curTx=payinTx+payoutTx;
     $("totalCom").textContent=inr(payin+payout); $("payinCom").textContent=inr(payin); $("payoutCom").textContent=inr(payout); $("gstCom").textContent=inr(gst);
     $("payinTx").textContent=payinTx.toLocaleString("en-IN"); $("payoutTx").textContent=payoutTx.toLocaleString("en-IN"); $("totalTx").textContent=(payinTx+payoutTx).toLocaleString("en-IN");
     $("payinAmt").textContent=inr(payinAmt); $("payoutAmt").textContent=inr(payoutAmt); $("totalAmt").textContent=inr(payinAmt+payoutAmt);
@@ -170,16 +171,30 @@ function render(c){
 function applyBoot(){ paintS(); paintAuto(); if($("selDate")&&!$("selDate").value) $("selDate").value=SELDATE; if($("deviceId")) $("deviceId").textContent=devId(); if($("who")) $("who").textContent=peday.email; if(getS("alarm")) startAlarm(); startAuto(); }
 
 // Auto-refresh every 3s — live only (today), only on the dashboard, non-overlapping.
-let autoTimer=null;
+let autoTimer=null, _curCom=0, _curTx=0;
+// Lightweight "commission updated" ping — toast + optional device notification,
+// no siren/voice (that's reserved for risk).
+function updateNotify(title,body){
+  toast(title+" "+body);
+  if(getS("notif")){ const ln=LN();
+    if(ln) ln.schedule({notifications:[{id:_nid++,title,body,schedule:{at:new Date(Date.now()+200)}}]}).catch(()=>{});
+    else if(window.Notification&&Notification.permission==="granted") new Notification(title,{body}); }
+}
+function flashCom(){ const el=document.querySelector(".hero"); if(!el) return; el.style.transition="box-shadow .2s"; el.style.boxShadow="0 0 0 3px var(--ok)"; setTimeout(()=>el.style.boxShadow="",700); }
 function startAuto(){ if(autoTimer||!autoOn()) return; paintAuto(); autoTimer=setInterval(async()=>{
   if(!autoOn()||_busy) return;
   if(!$("v-dash").classList.contains("on")) return;
   if(SELDATE!==today()) return;
   _busy=true;
   try {
+    const beforeCom=_curCom, beforeTx=_curTx;
     const n = await refreshNew();          // light: only new txns
     if(n===-1){ await loadData(); render(CACHE); }   // cache stale -> full load once
-    else if(n>0){ render(CACHE); }          // new txns -> re-render from cache
+    else if(n>0){                          // new txns -> re-render + signal the update
+      render(CACHE);
+      const dCom=_curCom-beforeCom, dTx=_curTx-beforeTx;
+      if(dTx>0){ flashCom(); updateNotify("Commission updated", `+${inr(dCom)} · ${dTx} new txn`+(dTx>1?"s":"")); }
+    }
     // n===0 -> nothing changed, no work
   } catch(e){ if(/sign in/i.test(e.message)){ peday.logout(); location.reload(); } }
   finally { _busy=false; }
