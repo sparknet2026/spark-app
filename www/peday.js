@@ -54,7 +54,7 @@ async function fetchAll(path, params) {
 const peday = {
   ENVS, setEnv, envName, login, logout, isAuthed, apiGet, fetchAll, SUCCESS,
   merchants: () => apiGet("/api/v1/admin/merchants").then(d => d.CONTENT || d),
-  payins: (from, to) => fetchAll("/api/v1/admin/payins", { from, to }),
+  payins: (from, to) => fetchAll("/api/v1/admin/payin-intents", { from, to }),
   payouts: (from, to) => fetchAll("/api/v1/admin/payouts", { from, to }),
   ledger: (m) => apiGet(`/api/v1/admin/wallets/merchant/${m}/transactions`).then(d => Array.isArray(d) ? d : (d.CONTENT || d)),
   get email() { return localStorage.getItem("peday_email") || ""; },
