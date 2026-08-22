@@ -38,7 +38,6 @@ $("loginbtn").addEventListener("click", async () => {
     await peday.login($("lu").value.trim(), $("lp").value);
     localStorage.setItem("peday_auth","1");
     $("login").style.display="none"; $("app").style.display="flex";
-    document.querySelectorAll("#envseg button").forEach(b=>b.classList.toggle("on",b.dataset.env===peday.envName()));
     boot();
   } catch(e){ err.textContent=e.message; err.style.display="block"; }
   finally { btn.disabled=false; btn.textContent="Sign in"; }
@@ -53,10 +52,8 @@ document.querySelectorAll(".nav button").forEach(b=>b.addEventListener("click",(
   if(b.dataset.view==="risk") renderRisk();
   if(b.dataset.view==="wallet") loadWallet();
 }));
-document.querySelectorAll("#envseg button").forEach(b=>b.addEventListener("click",()=>{
-  document.querySelectorAll("#envseg button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
-  peday.setEnv(b.dataset.env); CACHE.day=""; boot();
-}));
+// Environment is fixed at login (its token is env-specific). To switch, sign out
+// and sign in to the other environment — this keeps the data from ever mixing.
 $("refreshBtn").addEventListener("click",()=>{ CACHE.day=""; boot(true); });
 $("bell").addEventListener("click",()=>{ $("belldot").style.display="none"; notify("Commission","Total "+$("totalCom").textContent); });
 
