@@ -26,10 +26,12 @@ function riskCount(payins, payouts) {
   (payouts || []).forEach(r => T.push(mk(r, "Payout")));
   function mk(r, mode) {
     return { mode, vendor: r.MERCHANTCODE || "", account: String(r.ACCOUNTNUMBER || "").trim(),
-      mobile: String(r.CUSTOMERMOBILENUMBER || "").trim(), name: String(r.CUSTOMERNAME || r.PAYERNAME || "").trim(),
+      mobile: String(r.CUSTOMERMOBILENUMBER || "").trim(),
+      vpa: String(r.PAYERVPA || r.CUSTOMERVPA || "").trim(),
       amount: num(r.APPROVEDAMOUNT), status: String(r.PAYMENTSTATUS || r.TXNSTATUS || "").toUpperCase(),
       day: dayOf(r), hour: hourOf(r) };
   }
+  const SUCCESS = new Set(["SUCCESS", "SUCCESSFUL", "COMPLETED", "CREDITED"]);
   const grp = (keyFn) => { const g = {}; T.forEach(t => { const k = keyFn(t); if (k == null) return; (g[k] = g[k] || []).push(t); }); return g; };
   const sum = a => a.reduce((s, t) => s + t.amount, 0);
   let n = 0;
@@ -37,8 +39,8 @@ function riskCount(payins, payouts) {
   Object.values(grp(t => t.account ? t.account + "|" + t.day : null)).forEach(a => { if (a.length >= 5 || sum(a) >= 200000) n++; });
   // same mobile: >=10/day
   Object.values(grp(t => t.mobile ? t.mobile + "|" + t.day : null)).forEach(a => { if (a.length >= 10) n++; });
-  // same borrower: >=3 accounts or >=15 txns
-  Object.values(grp(t => t.name || null)).forEach(a => { const acc = new Set(a.map(t => t.account).filter(Boolean)); if (acc.size >= 3 || a.length >= 15) n++; });
+  // same UPI: >=3 successful txns on one VPA in a day
+  Object.values(grp(t => (t.vpa && SUCCESS.has(t.status)) ? t.vpa + "|" + t.day : null)).forEach(a => { if (a.length >= 3) n++; });
   // high value: single >= 50000
   T.forEach(t => { if (t.amount >= 50000) n++; });
   // after hours 1-5

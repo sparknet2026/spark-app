@@ -119,6 +119,27 @@ $("bell").addEventListener("click",()=>{ $("belldot").style.display="none"; noti
 $("sheetClose").onclick=()=>$("sheet").classList.remove("on");
 $("sheet").onclick=e=>{ if(e.target.id==="sheet") $("sheet").classList.remove("on"); };
 
+// Lookup: count a mobile number or UPI's SUCCESSFUL transactions (loaded date).
+$("lookupBtn").addEventListener("click", doLookup);
+$("lookupQ").addEventListener("keydown", e=>{ if(e.key==="Enter") doLookup(); });
+function doLookup(){
+  const q=($("lookupQ").value||"").trim().toLowerCase();
+  if(!q){ $("lookupRes").innerHTML='<div class="muted" style="margin-top:12px">Enter a mobile number or UPI.</div>'; return; }
+  const all=[...(CACHE.payins||[]).map(r=>({r,mode:"Payin"})),...(CACHE.payouts||[]).map(r=>({r,mode:"Payout"}))];
+  const match=all.filter(({r})=>{
+    const st=String(r.PAYMENTSTATUS||r.TXNSTATUS||"").toUpperCase(); if(!peday.SUCCESS.has(st)) return false;
+    const mob=String(r.CUSTOMERMOBILENUMBER||"").toLowerCase();
+    const vpa=String(r.PAYERVPA||r.CUSTOMERVPA||"").toLowerCase();
+    return mob.includes(q)||vpa.includes(q);
+  });
+  const total=match.reduce((s,{r})=>s+logic.num(r.APPROVEDAMOUNT),0);
+  if(!match.length){ $("lookupRes").innerHTML='<div class="empty">No successful transactions for "'+q+'" on '+dateLabel()+'.</div>'; return; }
+  const rows=match.map(({r,mode})=>({name:r.CUSTOMERNAME||r.PAYERNAME||"",mob:r.CUSTOMERMOBILENUMBER||"",vpa:r.PAYERVPA||r.CUSTOMERVPA||"",amt:logic.num(r.APPROVEDAMOUNT),mode,time:r.TRANSACTIONTIMESTAMP||r.CREATEDAT||r.CREATEDDATE||"",id:r.GATEWAYTRANSACTIONID||""}))
+    .sort((a,b)=>String(b.time).localeCompare(String(a.time)));
+  $("lookupRes").innerHTML=`<div class="rowline" style="border-top:1px solid var(--line);margin-top:10px"><div class="l"><b>${match.length} successful txn${match.length>1?"s":""}</b><small>${dateLabel()}</small></div><div class="r">${inr(total)}</div></div>`+
+    rows.map(x=>`<div class="rowline"><div class="l">${x.name||x.vpa||x.mob||"—"}<small>${x.mob}${x.vpa?" · "+x.vpa:""} · ${(x.time||"").slice(0,16).replace("T"," ")} · ${x.mode}</small></div><div class="r">${inr(x.amt)}</div></div>`).join("");
+}
+
 // ---- Full load of the selected day (builds the seen-id sets for incremental) ----
 async function loadData(){
   const d=SELDATE;

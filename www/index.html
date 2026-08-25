@@ -101,6 +101,14 @@
       <div class="card"><h3>By vendor — amount · commission (payin / payout)</h3><div id="vendorList"><div class="empty"><span class="spin"></span></div></div></div>
     </div>
     <div class="view" id="v-risk">
+      <div class="card">
+        <h3>Lookup — mobile or UPI (SUCCESS only)</h3>
+        <div style="display:flex;gap:8px">
+          <input id="lookupQ" placeholder="mobile number or UPI (@…)" style="flex:1;padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:var(--bg);color:var(--ink);font-size:15px">
+          <button class="btn" id="lookupBtn" style="width:auto;margin:0;padding:11px 16px">Search</button>
+        </div>
+        <div id="lookupRes"><div class="muted" style="margin-top:12px">Enter a mobile number or UPI to count its successful transactions.</div></div>
+      </div>
       <div class="card"><div class="toggle" style="margin-bottom:6px"><h3 style="margin:0">🚨 Risk flags · today</h3><span class="pill" id="riskCount">—</span></div>
         <div id="riskList"><div class="empty"><span class="spin"></span></div></div></div>
     </div>

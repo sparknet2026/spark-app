@@ -57,7 +57,7 @@ function vendorCommission(payins, payouts, rates) {
 const DEFAULT_RULES = {
   same_account: { enabled: true, max_txns_per_day: 5, max_amount_per_day: 200000, severity: "high" },
   same_mobile: { enabled: true, max_txns_per_day: 10, severity: "medium" },
-  same_borrower: { enabled: true, max_accounts: 3, max_txns: 15, severity: "high" },
+  same_upi: { enabled: true, max_txns_per_day: 3, severity: "high" },
   volume_spike: { enabled: true, pct_above_avg: 50, min_baseline_days: 3, severity: "high" },
   after_hours: { enabled: true, start_hour: 1, end_hour: 5, severity: "medium" },
   high_value_txn: { enabled: true, min_amount: 50000, severity: "medium" },
@@ -71,6 +71,7 @@ function saveRules(r) { localStorage.setItem("peday_rules", JSON.stringify(r)); 
 function norm(r, mode) {
   return { mode, vendor: r.MERCHANTCODE || "", account: String(r.ACCOUNTNUMBER || "").trim(),
     mobile: String(r.CUSTOMERMOBILENUMBER || "").trim(), name: String(r.CUSTOMERNAME || r.PAYERNAME || "").trim(),
+    vpa: String(r.PAYERVPA || r.CUSTOMERVPA || "").trim(),
     amount: num(r.APPROVEDAMOUNT), status: statusOf(r), day: dayOf(r), hour: hourOf(r.TRANSACTIONTIMESTAMP || r.CREATEDAT || r.CREATEDDATE),
     ts: String(r.TRANSACTIONTIMESTAMP || r.CREATEDAT || r.CREATEDDATE || ""),
     txn: r.GATEWAYTRANSACTIONID || "" };
@@ -108,12 +109,10 @@ function riskScan(payins, payouts, rules) {
       `mobile used in ${a.length} txns in one day`, r.severity, a);
   });
 
-  r = rules.same_borrower;
-  if (r?.enabled) Object.entries(group(t => t.name || null)).forEach(([name, a]) => {
-    const accts = new Set(a.map(t => t.account).filter(Boolean)), c = a.length;
-    const ha = accts.size >= r.max_accounts, ht = c >= r.max_txns;
-    if (ha || ht) add("Same borrower", name, "", "", c, sum(a),
-      ha ? `${accts.size} different accounts, ${c} txns` : `${c} txns`, ha ? "high" : r.severity, a);
+  r = rules.same_upi;
+  if (r?.enabled) Object.entries(group(t => (t.vpa && peday.SUCCESS.has(t.status)) ? t.vpa + "|" + t.day : null)).forEach(([k, a]) => {
+    if (a.length >= r.max_txns_per_day) add("Same UPI", k.split("|")[0], "", a[0].day, a.length, sum(a),
+      `UPI used in ${a.length} successful txns in one day`, r.severity, a);
   });
 
   r = rules.volume_spike;
