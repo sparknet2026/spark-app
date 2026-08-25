@@ -286,7 +286,7 @@ function showFlag(k){
   const total=rows.reduce((s,r)=>s+(r.amount||0),0);
   $("sheetTitle").textContent=f.Rule+" — "+f.Entity;
   $("sheetSub").textContent=`${f.Count} transactions · total ${inr(total)}`;
-  $("sheetBody").innerHTML=rows.map(r=>`<div class="rowline"><div class="l">${r.name||r.account||r.mobile||"—"}<small>${r.id||""} · ${(r.time||"").slice(0,16).replace("T"," ")} · ${r.mode} · ${r.status}</small></div><div class="r">${inr(r.amount)}</div></div>`).join("")||'<div class="empty">No transactions.</div>';
+  $("sheetBody").innerHTML=rows.map(r=>`<div class="rowline"><div class="l">${r.name||r.vpa||r.account||r.mobile||"—"}<small>${r.mobile||""}${r.vpa?" · "+r.vpa:""} · ${(r.time||"").slice(0,16).replace("T"," ")} · ${r.mode} · <b>${r.status}</b>${r.reason&&r.status!=="SUCCESS"?" · "+r.reason:""}</small></div><div class="r">${inr(r.amount)}</div></div>`).join("")||'<div class="empty">No transactions.</div>';
   $("sheet").classList.add("on");
 }
 

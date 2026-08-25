@@ -55,6 +55,7 @@ function vendorCommission(payins, payouts, rates) {
 
 // ---- Risk engine (9 rules) ----
 const DEFAULT_RULES = {
+  success_only: true,
   same_account: { enabled: true, max_txns_per_day: 5, max_amount_per_day: 200000, severity: "high" },
   same_mobile: { enabled: true, max_txns_per_day: 10, severity: "medium" },
   same_upi: { enabled: true, max_txns_per_day: 3, severity: "high" },
@@ -64,7 +65,9 @@ const DEFAULT_RULES = {
   structuring: { enabled: true, band_min: 45000, band_max: 50000, min_txns: 2, severity: "high" },
   high_failure_rate: { enabled: true, min_txns: 20, max_fail_ratio: 0.5, severity: "medium" },
   round_amount: { enabled: true, multiple_of: 10000, min_txns: 5, severity: "low" },
+  repeated_failure: { enabled: true, max_failed: 5, severity: "medium" },
 };
+const FAILED = new Set(["FAILED", "FAILURE", "DECLINED", "REJECTED"]);
 function getRules() { try { return JSON.parse(localStorage.getItem("peday_rules")) || DEFAULT_RULES; } catch (e) { return DEFAULT_RULES; } }
 function saveRules(r) { localStorage.setItem("peday_rules", JSON.stringify(r)); }
 
@@ -72,6 +75,7 @@ function norm(r, mode) {
   return { mode, vendor: r.MERCHANTCODE || "", account: String(r.ACCOUNTNUMBER || "").trim(),
     mobile: String(r.CUSTOMERMOBILENUMBER || "").trim(), name: String(r.CUSTOMERNAME || r.PAYERNAME || "").trim(),
     vpa: String(r.PAYERVPA || r.CUSTOMERVPA || "").trim(),
+    reason: String(r.GATEWAYRESPONSEMESSAGE || r.REMARKS || r.FAILUREREASON || "").trim(),
     amount: num(r.APPROVEDAMOUNT), status: statusOf(r), day: dayOf(r), hour: hourOf(r.TRANSACTIONTIMESTAMP || r.CREATEDAT || r.CREATEDDATE),
     ts: String(r.TRANSACTIONTIMESTAMP || r.CREATEDAT || r.CREATEDDATE || ""),
     txn: r.GATEWAYTRANSACTIONID || "" };
@@ -79,8 +83,10 @@ function norm(r, mode) {
 const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 function riskScan(payins, payouts, rules) {
   rules = rules || getRules();
-  let txns = [...(payins || []).map(r => norm(r, "Payin")), ...(payouts || []).map(r => norm(r, "Payout"))].filter(t => t.day);
-  if (rules.success_only) txns = txns.filter(t => peday.SUCCESS.has(t.status));
+  const allTxns = [...(payins || []).map(r => norm(r, "Payin")), ...(payouts || []).map(r => norm(r, "Payout"))].filter(t => t.day);
+  // All rules run on SUCCESSFUL transactions (default). high_failure_rate is the
+  // exception - it needs the failed ones - and uses allTxns via groupAll below.
+  const txns = (rules.success_only === false) ? allTxns : allTxns.filter(t => peday.SUCCESS.has(t.status));
   const flags = [];
   const tmax = a => a.reduce((m, t) => (t.ts > m ? t.ts : m), "");
   const add = (rule, entity, mode, day, count, amount, detail, sev, arr) => {
@@ -90,10 +96,11 @@ function riskScan(payins, payouts, rules) {
       Mode: mode || "", Date: day || "", Count: count, Amount: round2(amount),
       TxnIDs: arr.map(t => t.txn).filter(Boolean).slice(0, 5).join(", "),
       Time: tmax(arr) || (day || ""),
-      Rows: arr.map(t => ({ id: t.txn, amount: round2(t.amount), name: t.name, account: t.account, mobile: t.mobile, mode: t.mode, status: t.status, time: t.ts })),
+      Rows: arr.map(t => ({ id: t.txn, amount: round2(t.amount), name: t.name, account: t.account, mobile: t.mobile, vpa: t.vpa, mode: t.mode, status: t.status, reason: t.reason, time: t.ts })),
       Detail: detail, Severity: cap(sev) });
   };
   const group = (keyFn) => { const g = {}; txns.forEach(t => { const k = keyFn(t); if (k == null) return; (g[k] = g[k] || []).push(t); }); return g; };
+  const groupAll = (keyFn) => { const g = {}; allTxns.forEach(t => { const k = keyFn(t); if (k == null) return; (g[k] = g[k] || []).push(t); }); return g; };
   const sum = a => a.reduce((s, t) => s + t.amount, 0);
 
   let r = rules.same_account;
@@ -142,7 +149,7 @@ function riskScan(payins, payouts, rules) {
       `${a.length} txns in ${r.band_min.toLocaleString()}-${r.band_max.toLocaleString()} band`, r.severity, a); });
 
   r = rules.high_failure_rate;
-  if (r?.enabled) Object.entries(group(t => t.vendor + "|" + t.day)).forEach(([k, a]) => {
+  if (r?.enabled) Object.entries(groupAll(t => t.vendor + "|" + t.day)).forEach(([k, a]) => {
     const failed = a.filter(t => ["FAILED", "FAILURE", "DECLINED"].includes(t.status)).length;
     if (a.length >= r.min_txns && failed / a.length >= r.max_fail_ratio)
       add("High failure rate", k.split("|")[0], "", a[0].day, failed, 0, `${failed}/${a.length} failed (${(failed/a.length*100).toFixed(0)}%)`, r.severity, a.filter(t=>["FAILED","FAILURE","DECLINED"].includes(t.status))); });
@@ -151,6 +158,24 @@ function riskScan(payins, payouts, rules) {
   if (r?.enabled) Object.entries(group(t => { const e = t.account || t.mobile || t.name; return (e && t.amount > 0 && t.amount % r.multiple_of === 0) ? e + "|" + t.day : null; }))
     .forEach(([k, a]) => { if (a.length >= r.min_txns) add("Round amounts", k.split("|")[0], "", a[0].day, a.length, sum(a),
       `${a.length} exact multiples of ${r.multiple_of.toLocaleString()}`, r.severity, a); });
+
+  // Repeated failures: an entity (account/mobile/UPI) failing > N times in a day,
+  // per mode (payin/payout). Uses allTxns (needs the failed ones). Shows the reason.
+  r = rules.repeated_failure;
+  if (r?.enabled) {
+    const g = {};
+    allTxns.forEach(t => { if (!FAILED.has(t.status)) return; const e = t.account || t.mobile || t.vpa; if (!e) return;
+      const k = e + "|" + t.mode + "|" + t.day; (g[k] = g[k] || []).push(t); });
+    Object.entries(g).forEach(([k, a]) => {
+      if (a.length > r.max_failed) {
+        const parts = k.split("|");
+        const reasons = {}; a.forEach(t => { const rs = t.reason || "Unknown"; reasons[rs] = (reasons[rs] || 0) + 1; });
+        const topReason = Object.entries(reasons).sort((x, y) => y[1] - x[1])[0][0];
+        add("Repeated failure", parts[0], parts[1], a[0].day, a.length, sum(a),
+          `${a.length} failed ${parts[1].toLowerCase()} txns — reason: ${topReason}`, r.severity, a);
+      }
+    });
+  }
 
   const ord = { High: 0, Medium: 1, Low: 2 };
   return flags.sort((x, y) => (ord[x.Severity] - ord[y.Severity]) || (y.Amount - x.Amount));

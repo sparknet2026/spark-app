@@ -32,19 +32,25 @@ function riskCount(payins, payouts) {
       day: dayOf(r), hour: hourOf(r) };
   }
   const SUCCESS = new Set(["SUCCESS", "SUCCESSFUL", "COMPLETED", "CREDITED"]);
-  const grp = (keyFn) => { const g = {}; T.forEach(t => { const k = keyFn(t); if (k == null) return; (g[k] = g[k] || []).push(t); }); return g; };
+  const S = T.filter(t => SUCCESS.has(t.status));   // all rules run on successful txns
+  const grp = (keyFn) => { const g = {}; S.forEach(t => { const k = keyFn(t); if (k == null) return; (g[k] = g[k] || []).push(t); }); return g; };
   const sum = a => a.reduce((s, t) => s + t.amount, 0);
   let n = 0;
   // same account: >=5 txns or >= 200000/day
   Object.values(grp(t => t.account ? t.account + "|" + t.day : null)).forEach(a => { if (a.length >= 5 || sum(a) >= 200000) n++; });
   // same mobile: >=10/day
   Object.values(grp(t => t.mobile ? t.mobile + "|" + t.day : null)).forEach(a => { if (a.length >= 10) n++; });
-  // same UPI: >=3 successful txns on one VPA in a day
-  Object.values(grp(t => (t.vpa && SUCCESS.has(t.status)) ? t.vpa + "|" + t.day : null)).forEach(a => { if (a.length >= 3) n++; });
+  // same UPI: >=3 on one VPA in a day
+  Object.values(grp(t => t.vpa ? t.vpa + "|" + t.day : null)).forEach(a => { if (a.length >= 3) n++; });
   // high value: single >= 50000
-  T.forEach(t => { if (t.amount >= 50000) n++; });
+  S.forEach(t => { if (t.amount >= 50000) n++; });
   // after hours 1-5
   Object.values(grp(t => (t.hour != null && t.hour >= 1 && t.hour < 5) ? t.vendor + "|" + t.day : null)).forEach(() => n++);
+  // repeated failure: entity failing > 5 times in a day (per mode) — uses all txns
+  const FAILED = new Set(["FAILED", "FAILURE", "DECLINED", "REJECTED"]);
+  const gf = {};
+  T.forEach(t => { if (!FAILED.has(t.status)) return; const e = t.account || t.mobile || t.vpa; if (!e) return; const k = e + "|" + t.mode + "|" + t.day; gf[k] = (gf[k] || 0) + 1; });
+  Object.values(gf).forEach(c => { if (c > 5) n++; });
   return n;
 }
 
