@@ -337,7 +337,7 @@ function loadFlow(){
     return {code,name:(CACHE.rates[code]&&CACHE.rates[code].name)||"",succ:m.succ,fail:m.fail,total:m.txns.length,amt:m.amt,maxRun,spike};
   }).sort((a,b)=>(b.maxRun-a.maxRun)||(b.total-a.total));
   $("flowList").innerHTML=rows.length?rows.map(r=>{
-    const fails=r.maxRun>=3?`<span class="pill p-bad">${r.maxRun} consecutive fails</span>`:"";
+    const fails=r.maxRun>=5?`<span class="pill p-bad">${r.maxRun} consecutive fails</span>`:"";
     const sp=r.spike>=3?`<span class="pill p-warn">volume spike ${r.spike.toFixed(1)}×</span>`:"";
     return `<div class="rowline"><div class="l">${r.code} <small style="display:inline;color:var(--muted)">${r.name}</small><small>✓${r.succ} ✗${r.fail} of ${r.total}</small>${(fails||sp)?`<small>${fails} ${sp}</small>`:""}</div><div class="r">${inr(r.amt)}</div></div>`;
   }).join(""):'<div class="empty">No '+FLOWMODE+' transactions for '+dateLabel()+'.</div>';
