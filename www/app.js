@@ -314,7 +314,17 @@ document.querySelectorAll("#flowseg button").forEach(b=>b.addEventListener("clic
   document.querySelectorAll("#flowseg button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
   FLOWMODE=b.dataset.fm; loadFlow();
 }));
-function loadFlow(){
+function lastNDates(end, n){ const out=[], d=new Date(end+"T00:00:00"); for(let i=0;i<n;i++){ out.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()-1); } return out; }
+function renderFlow(rows){
+  $("flowList").innerHTML=rows.length?rows.map(r=>{
+    const fails=r.maxRun>=5?`<span class="pill p-bad">${r.maxRun} consecutive fails</span>`:"";
+    const sp=r.spike>=3?`<span class="pill p-warn">hour spike ${r.spike.toFixed(1)}×</span>`:"";
+    const dod=(r.dod!=null&&r.dod>=2)?`<span class="pill p-bad">volume ${r.dod===Infinity?"new":r.dod.toFixed(1)+"×"} vs avg</span>`:"";
+    const badges=[fails,sp,dod].filter(Boolean).join(" ");
+    return `<div class="rowline"><div class="l"><b>${r.name||r.code}</b> <small style="display:inline;color:var(--muted)">${r.code}</small><small>✓${r.succ} ✗${r.fail} of ${r.total}${r.dodAvg?` · today ${inr(r.amt)} vs ${inr(r.dodAvg)} avg`:""}</small>${badges?`<small>${badges}</small>`:""}</div><div class="r">${inr(r.amt)}</div></div>`;
+  }).join(""):'<div class="empty">No '+FLOWMODE+' transactions for '+dateLabel()+'.</div>';
+}
+async function loadFlow(){
   const recs = FLOWMODE==="payout" ? (CACHE.payouts||[]) : (CACHE.payins||[]);
   $("flowTitle").textContent="Merchant flow · "+FLOWMODE;
   const FAILED=new Set(["FAILED","FAILURE","DECLINED","REJECTED"]);
@@ -336,11 +346,19 @@ function loadFlow(){
     const spike=avgH>0?maxH/avgH:1;
     return {code,name:(CACHE.rates[code]&&CACHE.rates[code].name)||"",succ:m.succ,fail:m.fail,total:m.txns.length,amt:m.amt,maxRun,spike};
   }).sort((a,b)=>(b.maxRun-a.maxRun)||(b.total-a.total));
-  $("flowList").innerHTML=rows.length?rows.map(r=>{
-    const fails=r.maxRun>=5?`<span class="pill p-bad">${r.maxRun} consecutive fails</span>`:"";
-    const sp=r.spike>=3?`<span class="pill p-warn">volume spike ${r.spike.toFixed(1)}×</span>`:"";
-    return `<div class="rowline"><div class="l">${r.code} <small style="display:inline;color:var(--muted)">${r.name}</small><small>✓${r.succ} ✗${r.fail} of ${r.total}</small>${(fails||sp)?`<small>${fails} ${sp}</small>`:""}</div><div class="r">${inr(r.amt)}</div></div>`;
-  }).join(""):'<div class="empty">No '+FLOWMODE+' transactions for '+dateLabel()+'.</div>';
+  renderFlow(rows);                 // 1) intraday view immediately
+  // 2) day-over-day: today's SUCCESSAMOUNT vs the merchant's avg over the prior 6 days
+  try {
+    const dates=lastNDates(SELDATE,7);
+    const daily=await Promise.all(dates.map(dt=>peday.dailyByMerchant(FLOWMODE,dt).then(list=>({dt,list})).catch(()=>({dt,list:[]}))));
+    const bmd={}; daily.forEach(({dt,list})=>list.forEach(x=>{ (bmd[x.MERCHANTCODE]=bmd[x.MERCHANTCODE]||{})[dt]=logic.num(x.SUCCESSAMOUNT); }));
+    rows.forEach(r=>{ const d=bmd[r.code]||{}, today=d[SELDATE]||r.amt;
+      const prior=dates.slice(1).map(dt=>d[dt]||0).filter(v=>v>0);
+      const avg=prior.length?prior.reduce((s,v)=>s+v,0)/prior.length:0;
+      r.dodAvg=avg; r.dod = avg>0 ? today/avg : (today>0 && prior.length? Infinity : null); });
+    rows.sort((a,b)=>((b.dod===Infinity?99:b.dod||0)-(a.dod===Infinity?99:a.dod||0))||(b.maxRun-a.maxRun));
+    renderFlow(rows);               // re-render with day-over-day badges
+  } catch(e){ /* keep intraday view */ }
 }
 
 // ---- Wallet ----

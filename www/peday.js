@@ -95,6 +95,8 @@ const peday = {
   payouts: (from, to) => fetchAll("/api/v1/admin/payouts", { from, to }),
   ledger: (m) => apiGet(`/api/v1/admin/wallets/merchant/${m}/transactions`).then(d => Array.isArray(d) ? d : (d.CONTENT || d)),
   balance: (m) => apiGet(`/api/v1/admin/wallets/merchant/${m}`),
+  // Per-merchant daily volume (SUCCESSAMOUNT) — one light call per date.
+  dailyByMerchant: (mode, date) => apiGet(`/api/v1/admin/dashboard/${mode}/commission`, { date }).then(d => Array.isArray(d) ? d : (d.CONTENT || [])),
   get email() { return localStorage.getItem("peday_email") || ""; },
 };
 window.peday = peday;
