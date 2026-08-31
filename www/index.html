@@ -109,13 +109,20 @@
         </div>
         <div id="lookupRes"><div class="muted" style="margin-top:12px">Enter a mobile number or UPI to count its successful transactions.</div></div>
       </div>
-      <div class="card"><div class="toggle" style="margin-bottom:6px"><h3 style="margin:0">🚨 Risk flags · today</h3><span class="pill" id="riskCount">—</span></div>
+      <div class="card">
+        <div class="toggle" style="margin-bottom:10px"><h3 style="margin:0">🚨 Risk flags</h3><span class="pill" id="riskCount">—</span></div>
+        <div class="seg" id="riskseg"><button data-rm="all" class="on">All</button><button data-rm="payin">Payin</button><button data-rm="payout">Payout</button></div>
         <div id="riskList"><div class="empty"><span class="spin"></span></div></div></div>
     </div>
     <div class="view" id="v-wallet">
-      <div class="card"><h3>Wallet ledger</h3><select id="walletMerch" style="margin-bottom:8px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%"></select>
-        <div class="rowline"><div class="l">Balance</div><div class="r" id="walletBal">—</div></div></div>
-      <div class="card"><div id="ledgerList"><div class="empty">Select a merchant.</div></div></div>
+      <div class="card hero"><h3>Total wallet balance</h3><div class="big" id="walletTotal">—</div>
+        <div class="split"><div class="s"><div class="k">Available</div><div class="v" id="walletAvail">—</div></div>
+        <div class="s"><div class="k">Held</div><div class="v" id="walletHeld">—</div></div>
+        <div class="s"><div class="k">Merchants</div><div class="v" id="walletN">—</div></div></div></div>
+      <div class="card"><h3>By merchant</h3><div id="walletMlist"><div class="empty"><span class="spin"></span></div></div></div>
+      <div class="card"><h3>Ledger</h3><select id="walletMerch" style="margin-bottom:8px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%"></select>
+        <div class="rowline"><div class="l">Balance</div><div class="r" id="walletBal">—</div></div>
+        <div id="ledgerList"><div class="empty">Select a merchant.</div></div></div>
     </div>
     <div class="view" id="v-set">
       <div class="card"><h3>Account</h3>

@@ -66,6 +66,7 @@ const DEFAULT_RULES = {
   high_failure_rate: { enabled: true, min_txns: 20, max_fail_ratio: 0.5, severity: "medium" },
   round_amount: { enabled: true, multiple_of: 10000, min_txns: 5, severity: "low" },
   repeated_failure: { enabled: true, max_failed: 5, severity: "medium" },
+  large_payout: { enabled: true, low_amount: 25000, high_amount: 50000 },
 };
 const FAILED = new Set(["FAILED", "FAILURE", "DECLINED", "REJECTED"]);
 function getRules() { try { return JSON.parse(localStorage.getItem("peday_rules")) || DEFAULT_RULES; } catch (e) { return DEFAULT_RULES; } }
@@ -139,9 +140,17 @@ function riskScan(payins, payouts, rules) {
       `${a.length} txns between ${String(r.start_hour).padStart(2,"0")}:00-${String(r.end_hour).padStart(2,"0")}:00`, r.severity, a));
 
   r = rules.high_value_txn;
-  if (r?.enabled) txns.filter(t => t.amount >= r.min_amount).forEach(t =>
+  if (r?.enabled) txns.filter(t => t.mode === "Payin" && t.amount >= r.min_amount).forEach(t =>
     add("High-value txn", t.account || t.mobile || t.name || t.vendor, t.mode, t.day, 1, t.amount,
-      `single ${t.mode.toLowerCase()} of ${t.amount.toLocaleString()}`, r.severity, [t]));
+      `single payin of ${t.amount.toLocaleString()}`, r.severity, [t]));
+
+  // Large payout — tiered: > low_amount = low risk, > high_amount = high risk.
+  r = rules.large_payout;
+  if (r?.enabled) txns.filter(t => t.mode === "Payout" && t.amount > r.low_amount).forEach(t => {
+    const sev = t.amount > r.high_amount ? "high" : "low";
+    add("Large payout", t.account || t.mobile || t.vpa || t.vendor, "Payout", t.day, 1, t.amount,
+      `payout of ${t.amount.toLocaleString()} (> ${(sev === "high" ? r.high_amount : r.low_amount).toLocaleString()})`, sev, [t]);
+  });
 
   r = rules.structuring;
   if (r?.enabled) Object.entries(group(t => { const e = t.account || t.mobile; return (e && t.amount >= r.band_min && t.amount < r.band_max) ? e + "|" + t.day : null; }))

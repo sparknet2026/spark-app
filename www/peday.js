@@ -94,6 +94,7 @@ const peday = {
   payins: (from, to) => fetchAll("/api/v1/admin/payin-intents", { from, to }),
   payouts: (from, to) => fetchAll("/api/v1/admin/payouts", { from, to }),
   ledger: (m) => apiGet(`/api/v1/admin/wallets/merchant/${m}/transactions`).then(d => Array.isArray(d) ? d : (d.CONTENT || d)),
+  balance: (m) => apiGet(`/api/v1/admin/wallets/merchant/${m}`),
   get email() { return localStorage.getItem("peday_email") || ""; },
 };
 window.peday = peday;

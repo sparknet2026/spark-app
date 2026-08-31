@@ -119,6 +119,11 @@ $("bell").addEventListener("click",()=>{ $("belldot").style.display="none"; noti
 $("sheetClose").onclick=()=>$("sheet").classList.remove("on");
 $("sheet").onclick=e=>{ if(e.target.id==="sheet") $("sheet").classList.remove("on"); };
 
+// Risk flow filter (All / Payin / Payout)
+document.querySelectorAll("#riskseg button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#riskseg button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
+  RISKMODE=b.dataset.rm; renderRisk();
+}));
 // Lookup: count a mobile number or UPI's SUCCESSFUL transactions (loaded date).
 $("lookupBtn").addEventListener("click", doLookup);
 $("lookupQ").addEventListener("keydown", e=>{ if(e.key==="Enter") doLookup(); });
@@ -257,14 +262,26 @@ function checkRisk(c){ LAST_RISK=logic.riskScan(c.payins,c.payouts,logic.getRule
   else $("riskdot").style.display="none";
 }
 let _riskIndex={};
+// Risk mode filter: recompute flags for the selected flow (all / payin / payout).
+let RISKMODE="all";
+function riskForMode(){
+  if(RISKMODE==="payin")  return logic.riskScan(CACHE.payins||[], [], logic.getRules());
+  if(RISKMODE==="payout") return logic.riskScan([], CACHE.payouts||[], logic.getRules());
+  return LAST_RISK;
+}
 function renderRisk(){
   const ig=ignoredSet();
   const byLatest=(a,b)=>String(b.Time||b.Date||"").localeCompare(String(a.Time||a.Date||"")); // newest first
-  const active=LAST_RISK.filter(f=>!ig.has(flagKey(f))).sort(byLatest);
-  const ignored=LAST_RISK.filter(f=>ig.has(flagKey(f))).sort(byLatest);
+  const SRC=riskForMode();
+  const active=SRC.filter(f=>!ig.has(flagKey(f))).sort(byLatest);
+  const ignored=SRC.filter(f=>ig.has(flagKey(f))).sort(byLatest);
   $("riskCount").textContent=active.length+" flags"; $("riskCount").className="pill "+(active.length?"p-bad":"p-ok");
   const sev=s=>s==="High"?"p-bad":(s==="Medium"?"p-warn":"p-ok");
-  _riskIndex={}; LAST_RISK.forEach(f=>_riskIndex[flagKey(f)]=f);
+  _riskIndex={}; SRC.forEach(f=>_riskIndex[flagKey(f)]=f);
+  // Total flagged transactions (unique) + amount across active flags.
+  const seen=new Set(); let flaggedAmt=0;
+  active.forEach(f=>(f.Rows||[]).forEach(r=>{ if(r.id&&!seen.has(r.id)){ seen.add(r.id); flaggedAmt+=r.amount||0; } }));
+  const summary=`<div class="rowline" style="border-bottom:2px solid var(--line)"><div class="l"><b>${active.length} flags · ${seen.size} transactions</b><small>${RISKMODE==="all"?"payin + payout":RISKMODE} · ${dateLabel()}</small></div><div class="r">${inr(flaggedAmt)}</div></div>`;
   const row=(x,isIg)=>{ const k=flagKey(x).replace(/"/g,"&quot;");
     const btn=isIg?`<button class="btn2" data-unign="${k}" style="padding:5px 9px;font-size:11px">Unignore</button>`
                   :`<button class="btn2" data-ign="${k}" style="padding:5px 9px;font-size:11px">Ignore</button>`;
@@ -272,7 +289,7 @@ function renderRisk(){
     const md=x.Mode?` · <b>${x.Mode}</b>`:"";
     return `<div class="rowline" style="${isIg?'opacity:.5':''}" data-flag="${k}"><div class="l" style="cursor:pointer">${x.Rule} <span class="pill ${sev(x.Severity)}">${x.Severity}</span><small>${x.Entity} · ${x.Merchant||""}${md} · ${x.Count} trx${t}</small><small style="color:var(--brand)">tap to see ${x.Count} transactions ▸</small></div>
       <div class="r" style="display:flex;gap:6px;align-items:center">${btn}</div></div>`; };
-  let html = active.length?active.map(x=>row(x,false)).join(""):'<div class="empty">✓ No active risk flags.</div>';
+  let html = (active.length||ignored.length ? summary : "") + (active.length?active.map(x=>row(x,false)).join(""):'<div class="empty">✓ No active risk flags.</div>');
   if(ignored.length) html += `<div class="muted" style="margin:10px 0 4px;font-weight:700">Ignored (${ignored.length})</div>` + ignored.map(x=>row(x,true)).join("");
   $("riskList").innerHTML=html;
   $("riskList").querySelectorAll("[data-ign]").forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreFlag(b.getAttribute("data-ign"));});
@@ -291,7 +308,18 @@ function showFlag(k){
 }
 
 // ---- Wallet ----
+async function loadWalletTotals(){
+  const codes=Object.keys(CACHE.rates||{}); if(!codes.length) return;
+  $("walletMlist").innerHTML='<div class="empty"><span class="spin"></span></div>';
+  try{
+    const results=await Promise.all(codes.map(c=>peday.balance(c).then(d=>({c,bal:logic.num(d.BALANCE),held:logic.num(d.LOCKED||d.HELD||0)})).catch(()=>({c,bal:0,held:0}))));
+    const avail=results.reduce((s,r)=>s+r.bal,0), held=results.reduce((s,r)=>s+r.held,0);
+    $("walletTotal").textContent=inr(avail+held); $("walletAvail").textContent=inr(avail); $("walletHeld").textContent=inr(held); $("walletN").textContent=results.length;
+    $("walletMlist").innerHTML=results.sort((a,b)=>b.bal-a.bal).map(r=>`<div class="rowline"><div class="l">${r.c}<small>${CACHE.rates[r.c]&&CACHE.rates[r.c].name||""}</small></div><div class="r">${inr(r.bal)}${r.held?`<small class="muted">held ${inr(r.held)}</small>`:""}</div></div>`).join("");
+  }catch(e){ $("walletMlist").innerHTML='<div class="empty">'+e.message+'</div>'; }
+}
 async function loadWallet(){
+  loadWalletTotals();
   const sel=$("walletMerch");
   if(!sel.options.length){ Object.keys(CACHE.rates).forEach(m=>{const o=document.createElement("option");o.value=o.textContent=m;sel.appendChild(o);}); sel.onchange=loadWallet; }
   $("ledgerList").innerHTML='<div class="empty"><span class="spin"></span></div>';

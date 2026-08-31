@@ -42,8 +42,10 @@ function riskCount(payins, payouts) {
   Object.values(grp(t => t.mobile ? t.mobile + "|" + t.day : null)).forEach(a => { if (a.length >= 10) n++; });
   // same UPI: >=3 on one VPA in a day
   Object.values(grp(t => t.vpa ? t.vpa + "|" + t.day : null)).forEach(a => { if (a.length >= 3) n++; });
-  // high value: single >= 50000
-  S.forEach(t => { if (t.amount >= 50000) n++; });
+  // high value payin: single >= 50000
+  S.forEach(t => { if (t.mode === "Payin" && t.amount >= 50000) n++; });
+  // large payout: > 25000 (low) / > 50000 (high)
+  S.forEach(t => { if (t.mode === "Payout" && t.amount > 25000) n++; });
   // after hours 1-5
   Object.values(grp(t => (t.hour != null && t.hour >= 1 && t.hour < 5) ? t.vendor + "|" + t.day : null)).forEach(() => n++);
   // repeated failure: entity failing > 5 times in a day (per mode) — uses all txns
