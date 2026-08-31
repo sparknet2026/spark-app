@@ -312,10 +312,14 @@ async function loadWalletTotals(){
   const codes=Object.keys(CACHE.rates||{}); if(!codes.length) return;
   $("walletMlist").innerHTML='<div class="empty"><span class="spin"></span></div>';
   try{
-    const results=await Promise.all(codes.map(c=>peday.balance(c).then(d=>({c,bal:logic.num(d.BALANCE),held:logic.num(d.LOCKED||d.HELD||0)})).catch(()=>({c,bal:0,held:0}))));
-    const avail=results.reduce((s,r)=>s+r.bal,0), held=results.reduce((s,r)=>s+r.held,0);
-    $("walletTotal").textContent=inr(avail+held); $("walletAvail").textContent=inr(avail); $("walletHeld").textContent=inr(held); $("walletN").textContent=results.length;
-    $("walletMlist").innerHTML=results.sort((a,b)=>b.bal-a.bal).map(r=>`<div class="rowline"><div class="l">${r.c}<small>${CACHE.rates[r.c]&&CACHE.rates[r.c].name||""}</small></div><div class="r">${inr(r.bal)}${r.held?`<small class="muted">held ${inr(r.held)}</small>`:""}</div></div>`).join("");
+    const results=await Promise.all(codes.map(c=>peday.balance(c).then(d=>({
+      c, total:logic.num(d.BALANCE),
+      avail:logic.num(d.AVAILABLEPAYOUTBALANCE!=null?d.AVAILABLEPAYOUTBALANCE:d.BALANCE),
+      held:logic.num(d.UNSETTLEDBALANCE||d.LOCKED||0),
+    })).catch(()=>({c,total:0,avail:0,held:0}))));
+    const total=results.reduce((s,r)=>s+r.total,0), avail=results.reduce((s,r)=>s+r.avail,0), held=results.reduce((s,r)=>s+r.held,0);
+    $("walletTotal").textContent=inr(total); $("walletAvail").textContent=inr(avail); $("walletHeld").textContent=inr(held); $("walletN").textContent=results.length;
+    $("walletMlist").innerHTML=results.sort((a,b)=>b.total-a.total).map(r=>`<div class="rowline"><div class="l">${r.c}<small>${CACHE.rates[r.c]&&CACHE.rates[r.c].name||""}</small></div><div class="r">${inr(r.total)}<small class="muted">${inr(r.avail)} avail · ${inr(r.held)} held</small></div></div>`).join("");
   }catch(e){ $("walletMlist").innerHTML='<div class="empty">'+e.message+'</div>'; }
 }
 async function loadWallet(){
@@ -324,9 +328,11 @@ async function loadWallet(){
   if(!sel.options.length){ Object.keys(CACHE.rates).forEach(m=>{const o=document.createElement("option");o.value=o.textContent=m;sel.appendChild(o);}); sel.onchange=loadWallet; }
   $("ledgerList").innerHTML='<div class="empty"><span class="spin"></span></div>';
   try {
-    const rows=await peday.ledger(sel.value||Object.keys(CACHE.rates)[0]);
+    const mcode=sel.value||Object.keys(CACHE.rates)[0];
+    const [rows,bal]=await Promise.all([peday.ledger(mcode), peday.balance(mcode).catch(()=>({}))]);
+    const av=logic.num(bal.AVAILABLEPAYOUTBALANCE!=null?bal.AVAILABLEPAYOUTBALANCE:bal.BALANCE), hd=logic.num(bal.UNSETTLEDBALANCE||0);
+    $("walletBal").innerHTML=`${inr(logic.num(bal.BALANCE))}<small class="muted">${inr(av)} avail · ${inr(hd)} held</small>`;
     const sorted=[...rows].sort((a,b)=>String(b.CREATEDAT||"").localeCompare(String(a.CREATEDAT||""))).slice(0,60);
-    const newest=sorted[0]; $("walletBal").textContent=inr(logic.num(newest&&newest.BALANCEAFTER));
     const dc=x=>x.DIRECTION==="CREDIT"?"var(--ok)":"var(--bad)";
     $("ledgerList").innerHTML=sorted.length?sorted.map(x=>`<div class="rowline"><div class="l">${x.TYPE}<small>${String(x.CREATEDAT||"").slice(0,16).replace("T"," ")} · ${x.DIRECTION}</small></div><div class="r" style="color:${dc(x)}">${x.DIRECTION==="CREDIT"?"+":"−"}${inr(logic.num(x.AMOUNT))}</div></div>`).join(""):'<div class="empty">No entries.</div>';
   } catch(e){ $("ledgerList").innerHTML='<div class="empty">'+e.message+'</div>'; }
