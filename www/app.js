@@ -108,6 +108,7 @@ document.querySelectorAll(".nav button").forEach(b=>b.addEventListener("click",(
   document.querySelectorAll(".view").forEach(v=>v.classList.remove("on")); $("v-"+b.dataset.view).classList.add("on");
   if(b.dataset.view==="risk") renderRisk();
   if(b.dataset.view==="wallet") loadWallet();
+  if(b.dataset.view==="flow") loadFlow();
 }));
 // Environment is fixed at login (its token is env-specific). To switch, sign out
 // and sign in to the other environment — this keeps the data from ever mixing.
@@ -305,6 +306,41 @@ function showFlag(k){
   $("sheetSub").textContent=`${f.Count} transactions · total ${inr(total)}`;
   $("sheetBody").innerHTML=rows.map(r=>`<div class="rowline"><div class="l">${r.name||r.vpa||r.account||r.mobile||"—"}<small>${r.mobile||""}${r.vpa?" · "+r.vpa:""} · ${(r.time||"").slice(0,16).replace("T"," ")} · ${r.mode} · <b>${r.status}</b>${r.reason&&r.status!=="SUCCESS"?" · "+r.reason:""}</small></div><div class="r">${inr(r.amount)}</div></div>`).join("")||'<div class="empty">No transactions.</div>';
   $("sheet").classList.add("on");
+}
+
+// ---- Trx Flow: per-merchant consecutive failures + hourly volume spike ----
+let FLOWMODE="payin";
+document.querySelectorAll("#flowseg button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#flowseg button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
+  FLOWMODE=b.dataset.fm; loadFlow();
+}));
+function loadFlow(){
+  const recs = FLOWMODE==="payout" ? (CACHE.payouts||[]) : (CACHE.payins||[]);
+  $("flowTitle").textContent="Merchant flow · "+FLOWMODE;
+  const FAILED=new Set(["FAILED","FAILURE","DECLINED","REJECTED"]);
+  const byM={};
+  recs.forEach(r=>{
+    const code=r.MERCHANTCODE||"—", st=String(r.PAYMENTSTATUS||r.TXNSTATUS||"").toUpperCase();
+    const ts=String(r.TRANSACTIONTIMESTAMP||r.CREATEDAT||r.CREATEDDATE||""), amt=logic.num(r.APPROVEDAMOUNT);
+    const hm=ts.match(/[T ](\d{1,2}):/), hr=hm?hm[1]:null;
+    const m=(byM[code]=byM[code]||{txns:[],succ:0,fail:0,amt:0,hours:{}});
+    m.txns.push({ts,failed:FAILED.has(st)});
+    if(FAILED.has(st)) m.fail++; else if(peday.SUCCESS.has(st)){ m.succ++; m.amt+=amt; }
+    if(hr!=null) m.hours[hr]=(m.hours[hr]||0)+1;
+  });
+  const rows=Object.entries(byM).map(([code,m])=>{
+    const sorted=m.txns.sort((a,b)=>String(a.ts).localeCompare(String(b.ts)));
+    let run=0,maxRun=0; sorted.forEach(t=>{ if(t.failed){run++; if(run>maxRun)maxRun=run;} else run=0; });
+    const hv=Object.values(m.hours), maxH=hv.length?Math.max(...hv):0;
+    const others=hv.filter(v=>v!==maxH), avgH=others.length?others.reduce((s,v)=>s+v,0)/others.length:0;
+    const spike=avgH>0?maxH/avgH:1;
+    return {code,name:(CACHE.rates[code]&&CACHE.rates[code].name)||"",succ:m.succ,fail:m.fail,total:m.txns.length,amt:m.amt,maxRun,spike};
+  }).sort((a,b)=>(b.maxRun-a.maxRun)||(b.total-a.total));
+  $("flowList").innerHTML=rows.length?rows.map(r=>{
+    const fails=r.maxRun>=3?`<span class="pill p-bad">${r.maxRun} consecutive fails</span>`:"";
+    const sp=r.spike>=3?`<span class="pill p-warn">volume spike ${r.spike.toFixed(1)}×</span>`:"";
+    return `<div class="rowline"><div class="l">${r.code} <small style="display:inline;color:var(--muted)">${r.name}</small><small>✓${r.succ} ✗${r.fail} of ${r.total}</small>${(fails||sp)?`<small>${fails} ${sp}</small>`:""}</div><div class="r">${inr(r.amt)}</div></div>`;
+  }).join(""):'<div class="empty">No '+FLOWMODE+' transactions for '+dateLabel()+'.</div>';
 }
 
 // ---- Wallet ----

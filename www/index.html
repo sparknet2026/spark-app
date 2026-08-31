@@ -114,6 +114,12 @@
         <div class="seg" id="riskseg"><button data-rm="all" class="on">All</button><button data-rm="payin">Payin</button><button data-rm="payout">Payout</button></div>
         <div id="riskList"><div class="empty"><span class="spin"></span></div></div></div>
     </div>
+    <div class="view" id="v-flow">
+      <div class="seg" id="flowseg"><button data-fm="payin" class="on">Payin</button><button data-fm="payout">Payout</button></div>
+      <div class="card"><h3 id="flowTitle">Merchant flow · payin</h3>
+        <div class="muted" style="margin:-6px 0 10px">Consecutive failures &amp; hourly volume spikes, per merchant.</div>
+        <div id="flowList"><div class="empty"><span class="spin"></span></div></div></div>
+    </div>
     <div class="view" id="v-wallet">
       <div class="card hero"><h3>Total wallet balance</h3><div class="big" id="walletTotal">—</div>
         <div class="split"><div class="s"><div class="k">Available</div><div class="v" id="walletAvail">—</div></div>
@@ -142,6 +148,7 @@
   <div class="nav">
     <button class="on" data-view="dash"><span class="ic">🏠</span>Home</button>
     <button data-view="risk"><span class="ic">🚨</span>Risk<span class="dot" id="riskdot" style="top:2px;right:16px;border-color:var(--card)"></span></button>
+    <button data-view="flow"><span class="ic">📈</span>Trx flow</button>
     <button data-view="wallet"><span class="ic">🏦</span>Wallet</button>
     <button data-view="set"><span class="ic">⚙️</span>Settings</button>
   </div>
