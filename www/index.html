@@ -43,6 +43,14 @@
   .rowline{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);} .rowline:last-child{border-bottom:0;}
   .rowline .l{font-weight:600;} .rowline .l small{display:block;color:var(--muted);font-weight:400;font-size:12px;} .rowline .r{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;}
   .pill{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;} .p-ok{background:var(--ok-bg);color:var(--ok);} .p-bad{background:var(--bad-bg);color:var(--bad);} .p-warn{background:var(--warn-bg);color:var(--warn);}
+  .pill.green{background:var(--ok-bg);color:var(--ok);} .pill.amber{background:var(--warn-bg);color:var(--warn);} .pill.red{background:var(--bad-bg);color:var(--bad);} .pill.grey{background:var(--line);color:var(--muted);}
+  .wrow{padding:13px 0;border-bottom:1px solid var(--line);} .wrow:last-child{border-bottom:0;}
+  .wrow.alert{background:var(--bad-bg);margin:0 -14px;padding:13px 14px;border-bottom:1px solid var(--line);}
+  .wtop{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+  .wname b{font-size:15px;font-weight:700;} .wname small{display:block;color:var(--muted);font-weight:500;font-size:12px;margin-top:1px;}
+  .wbal{font-variant-numeric:tabular-nums;font-weight:800;font-size:16px;white-space:nowrap;}
+  .wsub{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:8px;}
+  .wnote{color:var(--muted);font-size:12px;font-weight:500;}
   .seg{display:flex;gap:6px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:14px;}
   .seg button{flex:1;padding:9px;border:0;border-radius:9px;background:transparent;color:var(--muted);font-weight:700;font-size:13px;} .seg button.on{background:var(--card);color:var(--brand);box-shadow:var(--shadow);}
   .toggle{display:flex;align-items:center;justify-content:space-between;} .sw{width:48px;height:28px;border-radius:20px;background:var(--line);position:relative;cursor:pointer;transition:background .15s;}

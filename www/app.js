@@ -317,11 +317,16 @@ document.querySelectorAll("#flowseg button").forEach(b=>b.addEventListener("clic
 function lastNDates(end, n){ const out=[], d=new Date(end+"T00:00:00"); for(let i=0;i<n;i++){ out.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()-1); } return out; }
 function renderFlow(rows){
   $("flowList").innerHTML=rows.length?rows.map(r=>{
-    const fails=r.maxRun>=5?`<span class="pill p-bad">${r.maxRun} consecutive fails</span>`:"";
-    const sp=r.spike>=3?`<span class="pill p-warn">hour spike ${r.spike.toFixed(1)}×</span>`:"";
-    const dod=(r.dod!=null&&r.dod>=2)?`<span class="pill p-bad">volume ${r.dod===Infinity?"new":r.dod.toFixed(1)+"×"} vs avg</span>`:"";
-    const badges=[fails,sp,dod].filter(Boolean).join(" ");
-    return `<div class="rowline"><div class="l"><b>${r.name||r.code}</b> <small style="display:inline;color:var(--muted)">${r.code}</small><small>✓${r.succ} ✗${r.fail} of ${r.total}${r.dodAvg?` · today ${inr(r.amt)} vs ${inr(r.dodAvg)} avg`:""}</small>${badges?`<small>${badges}</small>`:""}</div><div class="r">${inr(r.amt)}</div></div>`;
+    const badges=[];
+    if(r.maxRun>=5) badges.push(`<span class="pill red">🔁 ${r.maxRun} fails in a row</span>`);
+    if(r.spike>=3) badges.push(`<span class="pill amber">⏱ busy hour ${r.spike.toFixed(1)}×</span>`);
+    if(r.dod!=null&&r.dod>=2) badges.push(`<span class="pill red">📈 volume ${r.dod===Infinity?"new":r.dod.toFixed(1)+"×"}</span>`);
+    const cmp=r.dodAvg?`<div class="wnote">6-day avg ${inr(r.dodAvg)}</div>`:"";
+    return `<div class="wrow${badges.length?" alert":""}">
+      <div class="wtop"><div class="wname"><b>${r.name||r.code}</b><small>${r.code}</small></div><div class="wbal">${inr(r.amt)}</div></div>
+      <div class="wsub"><span class="pill green">✓ ${r.succ}</span><span class="pill grey">✗ ${r.fail}</span><span class="wnote">of ${r.total} txns</span>${cmp}</div>
+      ${badges.length?`<div class="wsub">${badges.join("")}</div>`:""}
+    </div>`;
   }).join(""):'<div class="empty">No '+FLOWMODE+' transactions for '+dateLabel()+'.</div>';
 }
 async function loadFlow(){
@@ -373,7 +378,7 @@ async function loadWalletTotals(){
     })).catch(()=>({c,total:0,avail:0,held:0}))));
     const total=results.reduce((s,r)=>s+r.total,0), avail=results.reduce((s,r)=>s+r.avail,0), held=results.reduce((s,r)=>s+r.held,0);
     $("walletTotal").textContent=inr(total); $("walletAvail").textContent=inr(avail); $("walletHeld").textContent=inr(held); $("walletN").textContent=results.length;
-    $("walletMlist").innerHTML=results.sort((a,b)=>b.total-a.total).map(r=>`<div class="rowline"><div class="l">${r.c}<small>${CACHE.rates[r.c]&&CACHE.rates[r.c].name||""}</small></div><div class="r">${inr(r.total)}<small class="muted">${inr(r.avail)} avail · ${inr(r.held)} held</small></div></div>`).join("");
+    $("walletMlist").innerHTML=results.sort((a,b)=>b.total-a.total).map(r=>`<div class="wrow"><div class="wtop"><div class="wname"><b>${r.c}</b><small>${CACHE.rates[r.c]&&CACHE.rates[r.c].name||""}</small></div><div class="wbal">${inr(r.total)}</div></div><div class="wsub"><span class="pill green">${inr(r.avail)} available</span><span class="pill amber">${inr(r.held)} held</span></div></div>`).join("");
   }catch(e){ $("walletMlist").innerHTML='<div class="empty">'+e.message+'</div>'; }
 }
 async function loadWallet(){
@@ -385,7 +390,7 @@ async function loadWallet(){
     const mcode=sel.value||Object.keys(CACHE.rates)[0];
     const [rows,bal]=await Promise.all([peday.ledger(mcode), peday.balance(mcode).catch(()=>({}))]);
     const av=logic.num(bal.AVAILABLEPAYOUTBALANCE!=null?bal.AVAILABLEPAYOUTBALANCE:bal.BALANCE), hd=logic.num(bal.UNSETTLEDBALANCE||0);
-    $("walletBal").innerHTML=`${inr(logic.num(bal.BALANCE))}<small class="muted">${inr(av)} avail · ${inr(hd)} held</small>`;
+    $("walletBal").innerHTML=`${inr(logic.num(bal.BALANCE))}<small class="muted" style="display:block;margin-top:4px"><span class="pill green">${inr(av)} available</span> <span class="pill amber">${inr(hd)} held</span></small>`;
     const sorted=[...rows].sort((a,b)=>String(b.CREATEDAT||"").localeCompare(String(a.CREATEDAT||""))).slice(0,60);
     const dc=x=>x.DIRECTION==="CREDIT"?"var(--ok)":"var(--bad)";
     $("ledgerList").innerHTML=sorted.length?sorted.map(x=>`<div class="rowline"><div class="l">${x.TYPE}<small>${String(x.CREATEDAT||"").slice(0,16).replace("T"," ")} · ${x.DIRECTION}</small></div><div class="r" style="color:${dc(x)}">${x.DIRECTION==="CREDIT"?"+":"−"}${inr(logic.num(x.AMOUNT))}</div></div>`).join(""):'<div class="empty">No entries.</div>';
