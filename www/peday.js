@@ -86,14 +86,33 @@ async function fetchNew(path, from, to, seen) {
   return out;
 }
 
+// ---- Salora panel (separate system: LSP payin/payout wallets by company) ----
+// Independent host, its own (currently open) API — NOT tied to the peday/spark login.
+const SALORA = "https://panel.saloracapital.com";
+async function sget(path, params) {
+  const url = new URL(SALORA + path);
+  Object.entries(params || {}).forEach(([k, v]) => v != null && v !== "" && url.searchParams.set(k, v));
+  const r = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+const salora = {
+  BASE: SALORA,
+  collectionCompanies: () => sget("/api/v1/collection/wallet-companies").then(d => d.companies || []),
+  payoutCompanies: () => sget("/api/v1/payout/wallet-companies").then(d => d.companies || []),
+  collectionWallet: (name) => sget("/api/v1/collection/wallet", { company_name: name }),
+  payoutWallet: (name) => sget("/api/v1/payout/wallet", { company_name: name }),
+};
+
 const peday = {
-  ENVS, setEnv, envName, login, logout, forget, isAuthed, savedCreds, apiGet, fetchAll, fetchNew, SUCCESS,
+  ENVS, setEnv, envName, login, logout, forget, isAuthed, savedCreds, apiGet, fetchAll, fetchNew, SUCCESS, salora,
   PAYIN_PATH: "/api/v1/admin/payin-intents",
   PAYOUT_PATH: "/api/v1/admin/payouts",
   merchants: () => apiGet("/api/v1/admin/merchants").then(d => d.CONTENT || d),
   payins: (from, to) => fetchAll("/api/v1/admin/payin-intents", { from, to }),
   payouts: (from, to) => fetchAll("/api/v1/admin/payouts", { from, to }),
   ledger: (m) => apiGet(`/api/v1/admin/wallets/merchant/${m}/transactions`).then(d => Array.isArray(d) ? d : (d.CONTENT || d)),
+  ledgerAll: (m) => fetchAll(`/api/v1/admin/wallets/merchant/${m}/transactions`, {}),
   balance: (m) => apiGet(`/api/v1/admin/wallets/merchant/${m}`),
   // Per-merchant daily volume (SUCCESSAMOUNT) — one light call per date.
   dailyByMerchant: (mode, date) => apiGet(`/api/v1/admin/dashboard/${mode}/commission`, { date }).then(d => Array.isArray(d) ? d : (d.CONTENT || [])),

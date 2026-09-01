@@ -138,6 +138,29 @@
         <div class="rowline"><div class="l">Balance</div><div class="r" id="walletBal">—</div></div>
         <div id="ledgerList"><div class="empty">Select a merchant.</div></div></div>
     </div>
+    <div class="view" id="v-lsp">
+      <div class="card hero"><h3>All LSP wallet total</h3><div class="big" id="lspTotal">—</div>
+        <div class="split"><div class="s"><div class="k">Payin</div><div class="v" id="lspPayin">—</div></div>
+        <div class="s"><div class="k">Payout</div><div class="v" id="lspPayout">—</div></div>
+        <div class="s"><div class="k">Companies</div><div class="v" id="lspN">—</div></div></div></div>
+      <div class="card"><h3>By company</h3>
+        <div class="muted" style="margin:-6px 0 10px">Collection (payin) &amp; payout wallet balance · Salora panel.</div>
+        <div id="lspList"><div class="empty"><span class="spin"></span></div></div></div>
+    </div>
+    <div class="view" id="v-reco">
+      <div class="card"><h3>Reconciliation</h3>
+        <div class="muted" style="margin:-6px 0 10px">Opening + Payin − Payout − Commission = Balance · from wallet ledger.</div>
+        <div style="display:flex;gap:8px">
+          <label style="flex:1;font-size:12px;color:var(--muted)">From<input type="date" id="recoFrom" style="width:100%;margin-top:3px;padding:9px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)"></label>
+          <label style="flex:1;font-size:12px;color:var(--muted)">To<input type="date" id="recoTo" style="width:100%;margin-top:3px;padding:9px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)"></label>
+        </div>
+        <button class="btn" id="recoRun" style="margin-top:10px">Run reco</button></div>
+      <div class="card hero"><h3>Net · all merchants</h3><div class="big" id="recoBal">—</div>
+        <div class="split"><div class="s"><div class="k">Payin</div><div class="v" id="recoPayin">—</div></div>
+        <div class="s"><div class="k">Payout</div><div class="v" id="recoPayout">—</div></div>
+        <div class="s"><div class="k">Commission</div><div class="v" id="recoComm">—</div></div></div></div>
+      <div class="card"><h3>By merchant</h3><div id="recoList"><div class="empty">Pick dates and run reco.</div></div></div>
+    </div>
     <div class="view" id="v-set">
       <div class="card"><h3>Account</h3>
         <div class="rowline"><div class="l">Signed in</div><div class="r" id="who" style="font-size:13px">—</div></div>
@@ -156,8 +179,10 @@
   <div class="nav">
     <button class="on" data-view="dash"><span class="ic">🏠</span>Home</button>
     <button data-view="risk"><span class="ic">🚨</span>Risk<span class="dot" id="riskdot" style="top:2px;right:16px;border-color:var(--card)"></span></button>
-    <button data-view="flow"><span class="ic">📈</span>Trx flow</button>
+    <button data-view="flow"><span class="ic">📈</span>Flow</button>
     <button data-view="wallet"><span class="ic">🏦</span>Wallet</button>
+    <button data-view="lsp"><span class="ic">🏢</span>LSP</button>
+    <button data-view="reco"><span class="ic">📋</span>Reco</button>
     <button data-view="set"><span class="ic">⚙️</span>Settings</button>
   </div>
 </div>

@@ -109,6 +109,8 @@ document.querySelectorAll(".nav button").forEach(b=>b.addEventListener("click",(
   if(b.dataset.view==="risk") renderRisk();
   if(b.dataset.view==="wallet") loadWallet();
   if(b.dataset.view==="flow") loadFlow();
+  if(b.dataset.view==="lsp") loadLsp();
+  if(b.dataset.view==="reco") initReco();
 }));
 // Environment is fixed at login (its token is env-specific). To switch, sign out
 // and sign in to the other environment — this keeps the data from ever mixing.
@@ -395,6 +397,87 @@ async function loadWallet(){
     const dc=x=>x.DIRECTION==="CREDIT"?"var(--ok)":"var(--bad)";
     $("ledgerList").innerHTML=sorted.length?sorted.map(x=>`<div class="rowline"><div class="l">${x.TYPE}<small>${String(x.CREATEDAT||"").slice(0,16).replace("T"," ")} · ${x.DIRECTION}</small></div><div class="r" style="color:${dc(x)}">${x.DIRECTION==="CREDIT"?"+":"−"}${inr(logic.num(x.AMOUNT))}</div></div>`).join(""):'<div class="empty">No entries.</div>';
   } catch(e){ $("ledgerList").innerHTML='<div class="empty">'+e.message+'</div>'; }
+}
+
+// ---- LSP wallets (Salora panel: payin/payout wallet per company) ----
+async function loadLsp(){
+  $("lspList").innerHTML='<div class="empty"><span class="spin"></span></div>';
+  try{
+    const [cc,pc]=await Promise.all([
+      peday.salora.collectionCompanies().catch(()=>[]),
+      peday.salora.payoutCompanies().catch(()=>[]),
+    ]);
+    const [colRes,payRes]=await Promise.all([
+      Promise.all(cc.map(n=>peday.salora.collectionWallet(n).then(d=>({n,bal:logic.num(d.balance)})).catch(()=>({n,bal:0})))),
+      Promise.all(pc.map(n=>peday.salora.payoutWallet(n).then(d=>({n,bal:logic.num(d.wallet_balance)})).catch(()=>({n,bal:0})))),
+    ]);
+    const map={};
+    const get=n=>(map[n]=map[n]||{name:n,payin:0,payout:0});
+    colRes.forEach(r=>{get(r.n).payin=r.bal;});
+    payRes.forEach(r=>{get(r.n).payout=r.bal;});
+    const rows=Object.values(map);
+    const totPayin=rows.reduce((s,r)=>s+r.payin,0), totPayout=rows.reduce((s,r)=>s+r.payout,0);
+    $("lspTotal").textContent=inr(totPayin+totPayout);
+    $("lspPayin").textContent=inr(totPayin);
+    $("lspPayout").textContent=inr(totPayout);
+    $("lspN").textContent=rows.length;
+    rows.sort((a,b)=>((b.payin+b.payout)-(a.payin+a.payout)));
+    $("lspList").innerHTML=rows.length?rows.map(r=>`<div class="wrow"><div class="wtop"><div class="wname"><b>${r.name}</b></div><div class="wbal">${inr(r.payin+r.payout)}</div></div><div class="wsub"><span class="pill green">${inr(r.payin)} payin</span><span class="pill amber">${inr(r.payout)} payout</span></div></div>`).join(""):'<div class="empty">No companies.</div>';
+  }catch(e){ $("lspList").innerHTML='<div class="empty">'+e.message+'</div>'; }
+}
+
+// ---- Reconciliation (from wallet ledger) ----
+let RECOINIT=false;
+function initReco(){
+  if(!RECOINIT){
+    RECOINIT=true;
+    // default range: 1st of the selected month → selected date
+    const to=SELDATE||today(), from=to.slice(0,8)+"01";
+    $("recoFrom").value=from; $("recoTo").value=to;
+    $("recoRun").addEventListener("click",loadReco);
+  }
+}
+// Expected commission for one mode, applying the merchant's configured rate to the range totals.
+function expComm(cfg,amount,txns){ try{ return logic.applyRate(cfg,amount,txns).total; }catch(e){ return 0; } }
+function ratePct(cfg){ if(!cfg||!Object.keys(cfg).length) return ""; const t=String(cfg.TYPE||"PERCENT").toUpperCase(); return t==="FLAT"?`₹${logic.num(cfg.VALUE)}/txn`:`${logic.num(cfg.VALUE)}%`; }
+async function loadReco(){
+  const from=$("recoFrom").value, to=$("recoTo").value;
+  if(!from||!to){ toast("Pick both dates"); return; }
+  const codes=Object.keys(CACHE.rates||{}); if(!codes.length){ $("recoList").innerHTML='<div class="empty">No merchants loaded — open Home first.</div>'; return; }
+  $("recoList").innerHTML='<div class="empty"><span class="spin"></span></div>';
+  const day=r=>String(r.CREATEDAT||r.CREATEDDATE||"").slice(0,10);
+  const inRange=r=>{const d=day(r); return d>=from && d<=to;};
+  try{
+    const results=await Promise.all(codes.map(async c=>{
+      const rows=await peday.ledger(c).catch(()=>[]);
+      const asc=[...rows].sort((a,b)=>String(a.CREATEDAT||"").localeCompare(String(b.CREATEDAT||"")));
+      let opening=0; for(const r of asc){ if(day(r)<from) opening=logic.num(r.BALANCEAFTER); else break; }
+      let payin=0,payout=0,commActual=0,pinN=0,poutN=0,closing=opening;
+      asc.forEach(r=>{ if(!inRange(r)) return; const t=String(r.TYPE||"").toUpperCase(), a=logic.num(r.AMOUNT);
+        if(t==="PAYIN"){payin+=a;pinN++;} else if(t==="PAYOUT"){payout+=a;poutN++;}
+        else if(t==="COMMISSION"){commActual+=a;} else if(t==="COMMISSION_REVERSAL"){commActual-=a;}
+        closing=logic.num(r.BALANCEAFTER); });
+      const rt=CACHE.rates[c]||{};
+      const commExp=expComm(rt.payin,payin,pinN)+expComm(rt.payout,payout,poutN);
+      const balance=opening+payin-payout-commExp;      // expected balance per configured rates
+      const diff=balance-closing;                       // vs ledger's actual closing balance
+      return {c,name:rt.name,opening,payin,payout,pinN,poutN,commExp,commActual,balance,closing,diff,
+              pctIn:ratePct(rt.payin),pctOut:ratePct(rt.payout),active:(payin||payout||commActual)};
+    }));
+    const rows=results.filter(r=>r.active).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
+    const T=rows.reduce((s,r)=>({payin:s.payin+r.payin,payout:s.payout+r.payout,comm:s.comm+r.commExp,bal:s.bal+r.balance}),{payin:0,payout:0,comm:0,bal:0});
+    $("recoBal").textContent=inr(T.bal); $("recoPayin").textContent=inr(T.payin); $("recoPayout").textContent=inr(T.payout); $("recoComm").textContent=inr(T.comm);
+    $("recoList").innerHTML=rows.length?rows.map(r=>{
+      const ok=Math.abs(r.diff)<1;
+      const diffBadge=ok?`<span class="pill green">✓ matched</span>`:`<span class="pill red">diff ${inr(r.diff)}</span>`;
+      const pct=[r.pctIn&&`in ${r.pctIn}`,r.pctOut&&`out ${r.pctOut}`].filter(Boolean).join(" · ");
+      return `<div class="wrow${ok?"":" alert"}">
+        <div class="wtop"><div class="wname"><b>${r.name||r.c}</b><small>${r.c}</small></div><div class="wbal">${inr(r.balance)}</div></div>
+        <div class="wsub"><span class="wnote">Open ${inr(r.opening)}</span><span class="pill green">+${inr(r.payin)} in</span><span class="pill amber">−${inr(r.payout)} out</span></div>
+        <div class="wsub"><span class="pill grey">−${inr(r.commExp)} comm${pct?" · "+pct:""}</span>${diffBadge}</div>
+      </div>`;
+    }).join(""):'<div class="empty">No ledger activity in '+from+' → '+to+'.</div>';
+  }catch(e){ $("recoList").innerHTML='<div class="empty">'+e.message+'</div>'; }
 }
 
 // ---- Hourly alarm ----
