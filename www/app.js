@@ -318,22 +318,28 @@ document.querySelectorAll("#flowseg button").forEach(b=>b.addEventListener("clic
 }));
 function lastNDates(end, n){ const out=[], d=new Date(end+"T00:00:00"); for(let i=0;i<n;i++){ out.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()-1); } return out; }
 function renderFlow(rows){
-  $("flowList").innerHTML=rows.length?rows.map(r=>{
-    const badges=[];
-    if(r.maxRun>=5) badges.push(`<span class="pill red">🔁 ${r.maxRun} fails in a row</span>`);
-    if(r.spike>=3) badges.push(`<span class="pill amber">⏱ busy hour ${r.spike.toFixed(1)}×</span>`);
-    if(r.dod!=null&&r.dod>=2) badges.push(`<span class="pill red">📈 volume ${r.dod===Infinity?"new":r.dod.toFixed(1)+"×"}</span>`);
-    const cmp=r.dodAvg?`<div class="wnote">6-day avg ${inr(r.dodAvg)}</div>`:"";
-    return `<div class="wrow${badges.length?" alert":""}">
-      <div class="wtop"><div class="wname"><b>${r.name||r.code}</b><small>${r.code}</small></div><div class="wbal">${inr(r.amt)}</div></div>
-      <div class="wsub"><span class="pill green">✓ ${r.succ}</span><span class="pill grey">✗ ${r.fail}</span><span class="wnote">of ${r.total} txns</span>${cmp}</div>
-      ${badges.length?`<div class="wsub">${badges.join("")}</div>`:""}
+  const M=FLOWMODE; // "payin" | "payout"
+  // Alert only on merchants with a sudden volume jump or repeated failures.
+  const flagged=rows.filter(r=>(r.dod!=null&&r.dod>=2)||r.spike>=3||r.maxRun>=5)
+    .sort((a,b)=>((b.dod===Infinity?99:b.dod||0)-(a.dod===Infinity?99:a.dod||0))||(b.spike-a.spike)||(b.maxRun-a.maxRun));
+  if(!flagged.length){
+    $("flowList").innerHTML='<div class="empty">No sudden volume jump or repeated failures in '+M+' for '+dateLabel()+'. ✓</div>';
+    return;
+  }
+  $("flowList").innerHTML=flagged.map(r=>{
+    const lines=[];
+    if(r.dod!=null&&r.dod>=2) lines.push(`<div class="alertline red">📈 <b>${M} volume ${r.dod===Infinity?"is all-new today":r.dod.toFixed(1)+"× the usual"}</b> — today ${inr(r.amt)}${r.dodAvg?" vs "+inr(r.dodAvg)+" daily average":""}</div>`);
+    if(r.spike>=3) lines.push(`<div class="alertline amber">⏱ <b>Sudden spike within today</b> — one hour saw ${r.spike.toFixed(1)}× this merchant's average ${M}</div>`);
+    if(r.maxRun>=5) lines.push(`<div class="alertline red">🔁 <b>${r.maxRun} ${M}s failed in a row</b></div>`);
+    return `<div class="wrow alert">
+      <div class="wtop"><div class="wname"><b>${r.name||r.code}</b><small>${r.code} · ✓${r.succ} done · ✗${r.fail} failed</small></div><div class="wbal">${inr(r.amt)}</div></div>
+      ${lines.join("")}
     </div>`;
-  }).join(""):'<div class="empty">No '+FLOWMODE+' transactions for '+dateLabel()+'.</div>';
+  }).join("");
 }
 async function loadFlow(){
   const recs = FLOWMODE==="payout" ? (CACHE.payouts||[]) : (CACHE.payins||[]);
-  $("flowTitle").textContent="Merchant flow · "+FLOWMODE;
+  $("flowTitle").textContent="Volume alerts · "+FLOWMODE;
   const FAILED=new Set(["FAILED","FAILURE","DECLINED","REJECTED"]);
   const byM={};
   recs.forEach(r=>{

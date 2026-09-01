@@ -51,6 +51,7 @@
   .wbal{font-variant-numeric:tabular-nums;font-weight:800;font-size:16px;white-space:nowrap;}
   .wsub{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:8px;}
   .wnote{color:var(--muted);font-size:12px;font-weight:500;}
+  .alertline{font-size:13px;line-height:1.45;margin-top:8px;} .alertline.red{color:var(--bad);} .alertline.amber{color:var(--warn);}
   .seg{display:flex;gap:6px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:14px;}
   .seg button{flex:1;padding:9px;border:0;border-radius:9px;background:transparent;color:var(--muted);font-weight:700;font-size:13px;} .seg button.on{background:var(--card);color:var(--brand);box-shadow:var(--shadow);}
   .toggle{display:flex;align-items:center;justify-content:space-between;} .sw{width:48px;height:28px;border-radius:20px;background:var(--line);position:relative;cursor:pointer;transition:background .15s;}
@@ -125,7 +126,7 @@
     <div class="view" id="v-flow">
       <div class="seg" id="flowseg"><button data-fm="payin" class="on">Payin</button><button data-fm="payout">Payout</button></div>
       <div class="card"><h3 id="flowTitle">Merchant flow · payin</h3>
-        <div class="muted" style="margin:-6px 0 10px">Consecutive failures &amp; hourly volume spikes, per merchant.</div>
+        <div class="muted" style="margin:-6px 0 10px">Merchants with a sudden jump in volume, or many failures in a row.</div>
         <div id="flowList"><div class="empty"><span class="spin"></span></div></div></div>
     </div>
     <div class="view" id="v-wallet">
