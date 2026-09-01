@@ -437,46 +437,59 @@ function initReco(){
     $("recoRun").addEventListener("click",loadReco);
   }
 }
+function recoRowHtml(r){
+  const ok=Math.abs(r.diff)<1;
+  const diffBadge=ok?`<span class="pill green">✓ matched</span>`:`<span class="pill red">off by ${inr(r.diff)}</span>`;
+  return `<div class="wrow${ok?"":" alert"}">
+    <div class="wtop"><div class="wname"><b>${r.name||r.c}</b><small>${r.c}</small></div><div class="wbal">${inr(r.balance)}</div></div>
+    <div class="wsub"><span class="wnote">Open ${inr(r.opening)}</span><span class="pill green">+${inr(r.payin)} in</span><span class="pill amber">−${inr(r.payout)} out</span></div>
+    <div class="wsub"><span class="pill grey">−${inr(r.commActual)} comm · ${r.effPct.toFixed(2)}%</span>${diffBadge}</div>
+  </div>`;
+}
+let RECOSEQ=0;
 async function loadReco(){
   const from=$("recoFrom").value, to=$("recoTo").value;
   if(!from||!to){ toast("Pick both dates"); return; }
   const codes=Object.keys(CACHE.rates||{}); if(!codes.length){ $("recoList").innerHTML='<div class="empty">No merchants loaded — open Home first.</div>'; return; }
-  $("recoList").innerHTML='<div class="empty"><span class="spin"></span></div>';
+  const seq=++RECOSEQ;                 // cancel earlier runs if user re-runs
   const day=r=>String(r.CREATEDAT||r.CREATEDDATE||"").slice(0,10);
   const inRange=r=>{const d=day(r); return d>=from && d<=to;};
-  try{
-    const results=await Promise.all(codes.map(async c=>{
-      const rows=await peday.ledger(c).catch(()=>[]);
-      const asc=[...rows].sort((a,b)=>String(a.CREATEDAT||"").localeCompare(String(b.CREATEDAT||"")));
-      let opening=0; for(const r of asc){ if(day(r)<from) opening=logic.num(r.BALANCEAFTER); else break; }
-      let payin=0,payout=0,commActual=0,pinN=0,poutN=0,closing=opening;
-      asc.forEach(r=>{ if(!inRange(r)) return; const t=String(r.TYPE||"").toUpperCase(), a=logic.num(r.AMOUNT);
-        if(t==="PAYIN"){payin+=a;pinN++;} else if(t==="PAYOUT"){payout+=a;poutN++;}
-        else if(t==="COMMISSION"){commActual+=a;} else if(t==="COMMISSION_REVERSAL"){commActual-=a;}
-        closing=logic.num(r.BALANCEAFTER); });
-      const rt=CACHE.rates[c]||{};
-      // Reconcile with the commission the ledger ACTUALLY charged — every merchant's
-      // rate is different, so we use its real charge, not one assumed %.
-      const balance=opening+payin-payout-commActual;   // should foot to the ledger's closing
-      const diff=balance-closing;                       // ledger-consistency check (≈0)
-      const base=payin+payout;
-      const effPct=base>0 ? (commActual/base*100) : 0;  // effective commission %, per merchant
-      return {c,name:rt.name,opening,payin,payout,pinN,poutN,commActual,balance,closing,diff,effPct,
-              active:(payin||payout||commActual)};
-    }));
-    const rows=results.filter(r=>r.active).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
-    const T=rows.reduce((s,r)=>({payin:s.payin+r.payin,payout:s.payout+r.payout,comm:s.comm+r.commActual,bal:s.bal+r.balance}),{payin:0,payout:0,comm:0,bal:0});
+  const acc=[]; let done=0;
+  const T={payin:0,payout:0,comm:0,bal:0};
+  const paint=()=>{
+    if(seq!==RECOSEQ) return;
     $("recoBal").textContent=inr(T.bal); $("recoPayin").textContent=inr(T.payin); $("recoPayout").textContent=inr(T.payout); $("recoComm").textContent=inr(T.comm);
-    $("recoList").innerHTML=rows.length?rows.map(r=>{
-      const ok=Math.abs(r.diff)<1;
-      const diffBadge=ok?`<span class="pill green">✓ matched</span>`:`<span class="pill red">off by ${inr(r.diff)}</span>`;
-      return `<div class="wrow${ok?"":" alert"}">
-        <div class="wtop"><div class="wname"><b>${r.name||r.c}</b><small>${r.c}</small></div><div class="wbal">${inr(r.balance)}</div></div>
-        <div class="wsub"><span class="wnote">Open ${inr(r.opening)}</span><span class="pill green">+${inr(r.payin)} in</span><span class="pill amber">−${inr(r.payout)} out</span></div>
-        <div class="wsub"><span class="pill grey">−${inr(r.commActual)} comm · ${r.effPct.toFixed(2)}%</span>${diffBadge}</div>
-      </div>`;
-    }).join(""):'<div class="empty">No ledger activity in '+from+' → '+to+'.</div>';
-  }catch(e){ $("recoList").innerHTML='<div class="empty">'+e.message+'</div>'; }
+    const sorted=[...acc].sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
+    const prog=done<codes.length?`<div class="empty"><span class="spin"></span> Loading ${done}/${codes.length} merchants…</div>`:"";
+    $("recoList").innerHTML=(sorted.length?sorted.map(recoRowHtml).join(""):(done>=codes.length?'<div class="empty">No ledger activity in '+from+' → '+to+'.</div>':""))+prog;
+  };
+  paint();
+  async function one(c){
+    const rows=await peday.ledger(c).catch(()=>[]);
+    const asc=[...rows].sort((a,b)=>String(a.CREATEDAT||"").localeCompare(String(b.CREATEDAT||"")));
+    let opening=0; for(const r of asc){ if(day(r)<from) opening=logic.num(r.BALANCEAFTER); else break; }
+    let payin=0,payout=0,commActual=0,pinN=0,poutN=0,closing=opening;
+    asc.forEach(r=>{ if(!inRange(r)) return; const t=String(r.TYPE||"").toUpperCase(), a=logic.num(r.AMOUNT);
+      if(t==="PAYIN"){payin+=a;pinN++;} else if(t==="PAYOUT"){payout+=a;poutN++;}
+      else if(t==="COMMISSION"){commActual+=a;} else if(t==="COMMISSION_REVERSAL"){commActual-=a;}
+      closing=logic.num(r.BALANCEAFTER); });
+    const rt=CACHE.rates[c]||{};
+    const balance=opening+payin-payout-commActual, diff=balance-closing, base=payin+payout;
+    return {c,name:rt.name,opening,payin,payout,commActual,balance,diff,effPct:base>0?commActual/base*100:0,active:(payin||payout||commActual)};
+  }
+  // Bounded parallelism — stream each merchant's row in as it lands.
+  let idx=0;
+  async function worker(){
+    while(idx<codes.length){
+      const c=codes[idx++];
+      let r; try{ r=await one(c); }catch(e){ r={active:0}; }
+      if(seq!==RECOSEQ) return;         // a newer run superseded this one
+      done++;
+      if(r.active){ acc.push(r); T.payin+=r.payin;T.payout+=r.payout;T.comm+=r.commActual;T.bal+=r.balance; }
+      paint();
+    }
+  }
+  await Promise.all(Array.from({length:Math.min(6,codes.length)},worker));
 }
 
 // ---- Hourly alarm ----
