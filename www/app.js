@@ -437,9 +437,6 @@ function initReco(){
     $("recoRun").addEventListener("click",loadReco);
   }
 }
-// Expected commission for one mode, applying the merchant's configured rate to the range totals.
-function expComm(cfg,amount,txns){ try{ return logic.applyRate(cfg,amount,txns).total; }catch(e){ return 0; } }
-function ratePct(cfg){ if(!cfg||!Object.keys(cfg).length) return ""; const t=String(cfg.TYPE||"PERCENT").toUpperCase(); return t==="FLAT"?`₹${logic.num(cfg.VALUE)}/txn`:`${logic.num(cfg.VALUE)}%`; }
 async function loadReco(){
   const from=$("recoFrom").value, to=$("recoTo").value;
   if(!from||!to){ toast("Pick both dates"); return; }
@@ -458,23 +455,25 @@ async function loadReco(){
         else if(t==="COMMISSION"){commActual+=a;} else if(t==="COMMISSION_REVERSAL"){commActual-=a;}
         closing=logic.num(r.BALANCEAFTER); });
       const rt=CACHE.rates[c]||{};
-      const commExp=expComm(rt.payin,payin,pinN)+expComm(rt.payout,payout,poutN);
-      const balance=opening+payin-payout-commExp;      // expected balance per configured rates
-      const diff=balance-closing;                       // vs ledger's actual closing balance
-      return {c,name:rt.name,opening,payin,payout,pinN,poutN,commExp,commActual,balance,closing,diff,
-              pctIn:ratePct(rt.payin),pctOut:ratePct(rt.payout),active:(payin||payout||commActual)};
+      // Reconcile with the commission the ledger ACTUALLY charged — every merchant's
+      // rate is different, so we use its real charge, not one assumed %.
+      const balance=opening+payin-payout-commActual;   // should foot to the ledger's closing
+      const diff=balance-closing;                       // ledger-consistency check (≈0)
+      const base=payin+payout;
+      const effPct=base>0 ? (commActual/base*100) : 0;  // effective commission %, per merchant
+      return {c,name:rt.name,opening,payin,payout,pinN,poutN,commActual,balance,closing,diff,effPct,
+              active:(payin||payout||commActual)};
     }));
     const rows=results.filter(r=>r.active).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff));
-    const T=rows.reduce((s,r)=>({payin:s.payin+r.payin,payout:s.payout+r.payout,comm:s.comm+r.commExp,bal:s.bal+r.balance}),{payin:0,payout:0,comm:0,bal:0});
+    const T=rows.reduce((s,r)=>({payin:s.payin+r.payin,payout:s.payout+r.payout,comm:s.comm+r.commActual,bal:s.bal+r.balance}),{payin:0,payout:0,comm:0,bal:0});
     $("recoBal").textContent=inr(T.bal); $("recoPayin").textContent=inr(T.payin); $("recoPayout").textContent=inr(T.payout); $("recoComm").textContent=inr(T.comm);
     $("recoList").innerHTML=rows.length?rows.map(r=>{
       const ok=Math.abs(r.diff)<1;
-      const diffBadge=ok?`<span class="pill green">✓ matched</span>`:`<span class="pill red">diff ${inr(r.diff)}</span>`;
-      const pct=[r.pctIn&&`in ${r.pctIn}`,r.pctOut&&`out ${r.pctOut}`].filter(Boolean).join(" · ");
+      const diffBadge=ok?`<span class="pill green">✓ matched</span>`:`<span class="pill red">off by ${inr(r.diff)}</span>`;
       return `<div class="wrow${ok?"":" alert"}">
         <div class="wtop"><div class="wname"><b>${r.name||r.c}</b><small>${r.c}</small></div><div class="wbal">${inr(r.balance)}</div></div>
         <div class="wsub"><span class="wnote">Open ${inr(r.opening)}</span><span class="pill green">+${inr(r.payin)} in</span><span class="pill amber">−${inr(r.payout)} out</span></div>
-        <div class="wsub"><span class="pill grey">−${inr(r.commExp)} comm${pct?" · "+pct:""}</span>${diffBadge}</div>
+        <div class="wsub"><span class="pill grey">−${inr(r.commActual)} comm · ${r.effPct.toFixed(2)}%</span>${diffBadge}</div>
       </div>`;
     }).join(""):'<div class="empty">No ledger activity in '+from+' → '+to+'.</div>';
   }catch(e){ $("recoList").innerHTML='<div class="empty">'+e.message+'</div>'; }
