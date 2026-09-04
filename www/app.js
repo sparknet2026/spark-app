@@ -111,6 +111,7 @@ document.querySelectorAll(".nav button").forEach(b=>b.addEventListener("click",(
   if(b.dataset.view==="flow") loadFlow();
   if(b.dataset.view==="lsp") loadLsp();
   if(b.dataset.view==="reco") initReco();
+  if(b.dataset.view==="settle") initSettle();
 }));
 // Environment is fixed at login (its token is env-specific). To switch, sign out
 // and sign in to the other environment — this keeps the data from ever mixing.
@@ -496,6 +497,51 @@ async function loadReco(){
     }
   }
   await Promise.all(Array.from({length:Math.min(6,codes.length)},worker));
+}
+
+// ---- Settlement (schedule-based: settled vs unsettled payin) ----
+// Txn hour window -> settlement time (same day, or T+1). From the partner settlement schedule.
+const SETTLE_SCHED=[
+  {f:0,t:5,at:"13:00",d:0},{f:5,t:7,at:"14:30",d:0},{f:7,t:9,at:"15:30",d:0},
+  {f:9,t:11,at:"17:30",d:0},{f:11,t:13,at:"18:30",d:0},{f:13,t:15,at:"20:30",d:0},
+  {f:15,t:17,at:"22:30",d:0},{f:17,t:19,at:"10:30",d:1},{f:19,t:21,at:"10:30",d:1},
+  {f:21,t:24,at:"10:30",d:1},
+];
+function settleDT(date,at,dayOff){ const [h,m]=at.split(":").map(Number); const dt=new Date(date+"T00:00:00"); dt.setDate(dt.getDate()+dayOff); dt.setHours(h,m,0,0); return dt; }
+let SETTLEINIT=false;
+function initSettle(){
+  const sel=$("settleMerch");
+  if(!SETTLEINIT){
+    SETTLEINIT=true;
+    sel.innerHTML='<option value="ALL">All merchants</option>'+Object.keys(CACHE.rates||{}).map(m=>`<option value="${m}">${(CACHE.rates[m]&&CACHE.rates[m].name)||m}</option>`).join("");
+    sel.onchange=loadSettle;
+  }
+  loadSettle();
+}
+function loadSettle(){
+  const msel=$("settleMerch").value||"ALL";
+  const recs=(CACHE.payins||[]).filter(r=>peday.SUCCESS.has(String(r.PAYMENTSTATUS||r.TXNSTATUS||"").toUpperCase()));
+  const now=new Date();
+  const buckets=SETTLE_SCHED.map(w=>({...w,amt:0,n:0,dt:settleDT(SELDATE,w.at,w.d)}));
+  recs.forEach(r=>{
+    if(msel!=="ALL" && r.MERCHANTCODE!==msel) return;
+    const ts=String(r.TRANSACTIONTIMESTAMP||r.CREATEDAT||r.CREATEDDATE||"");
+    const hm=ts.match(/[T ](\d{1,2}):/); if(!hm) return; const h=+hm[1];
+    const w=buckets.find(b=>h>=b.f && h<b.t); if(!w) return;
+    w.amt+=logic.num(r.APPROVEDAMOUNT); w.n++;
+  });
+  let done=0,pend=0,tot=0,nT=0;
+  buckets.forEach(w=>{ w.settled=w.dt<=now; tot+=w.amt; nT+=w.n; if(w.settled) done+=w.amt; else pend+=w.amt; });
+  $("settleTot").textContent=inr(tot); $("settleDone").textContent=inr(done); $("settlePend").textContent=inr(pend); $("settleN").textContent=nT;
+  $("settleDate").textContent=dateLabel();
+  $("settleList").innerHTML=buckets.map(w=>{
+    const lbl=`${String(w.f).padStart(2,"0")}:00 – ${w.t===24?"00:00":String(w.t).padStart(2,"0")+":00"}`;
+    const badge=w.settled?`<span class="pill green">✓ settled</span>`:`<span class="pill amber">⏳ unsettled</span>`;
+    return `<div class="wrow${w.settled?"":" alert"}">
+      <div class="wtop"><div class="wname"><b>${lbl}</b><small>settles ${w.at} · ${w.d?"T+1":"same day"}</small></div><div class="wbal">${inr(w.amt)}</div></div>
+      <div class="wsub"><span class="wnote">${w.n} txns</span>${badge}</div>
+    </div>`;
+  }).join("");
 }
 
 // ---- Hourly alarm ----
