@@ -59,7 +59,12 @@
   .muted{color:var(--muted);font-size:13px;} .empty{text-align:center;color:var(--muted);padding:28px 10px;}
   .spin{display:inline-block;width:18px;height:18px;border:2px solid var(--line);border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite;vertical-align:-3px;}
   .nav{position:fixed;bottom:0;left:0;right:0;max-width:460px;margin:0 auto;background:var(--card);border-top:1px solid var(--line);display:flex;padding:6px 4px calc(6px + env(safe-area-inset-bottom));z-index:10;}
-  .nav button{flex:1;min-width:0;background:transparent;border:0;padding:8px 0;color:var(--muted);font-size:10px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:2px;} .nav button .ic{font-size:18px;} .nav button.on{color:var(--brand);}
+  .nav button{flex:1;min-width:0;background:transparent;border:0;padding:8px 0;color:var(--muted);font-size:11px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:3px;} .nav button .ic{font-size:20px;} .nav button.on{color:var(--brand);}
+  #moreSheet{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.45);display:none;align-items:flex-end;} #moreSheet.on{display:flex;}
+  .moregrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:6px 0 4px;}
+  .moregrid button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:14px;color:var(--ink);font-weight:700;font-size:15px;} .moregrid button .mi{font-size:24px;margin-bottom:4px;} .moregrid button small{color:var(--muted);font-weight:500;font-size:12px;}
+  .projgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .projcell{background:var(--bg);border-radius:10px;padding:10px 11px;} .projcell .pk{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.02em;} .projcell .pv{font-weight:800;font-size:15px;font-variant-numeric:tabular-nums;margin-top:2px;}
   #sheet{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.45);display:none;align-items:flex-end;}
   #sheet.on{display:flex;}
   .sheetcard{width:100%;max-width:460px;margin:0 auto;background:var(--card);border-radius:18px 18px 0 0;max-height:82vh;display:flex;flex-direction:column;}
@@ -105,6 +110,9 @@
         <div class="s" style="background:var(--ok-bg)"><div class="k" style="color:var(--ok)">Payin</div><div class="v" id="payinTx" style="color:var(--ok)">—</div><div class="k" id="payinAmt" style="color:var(--ok);text-transform:none;margin-top:2px">—</div></div>
         <div class="s" style="background:var(--info-bg)"><div class="k" style="color:var(--brand)">Payout</div><div class="v" id="payoutTx" style="color:var(--brand)">—</div><div class="k" id="payoutAmt" style="color:var(--brand);text-transform:none;margin-top:2px">—</div></div>
         <div class="s" style="background:var(--bg)"><div class="k" style="color:var(--muted)">Total</div><div class="v" id="totalTx">—</div><div class="k" id="totalAmt" style="color:var(--muted);text-transform:none;margin-top:2px">—</div></div></div></div>
+      <div class="card"><h3>Commission projection</h3>
+        <div class="muted" style="margin:-6px 0 10px">Estimated at today's rate · <span id="projRate">—</span>/hr. A guide, not a guarantee.</div>
+        <div id="projGrid" class="projgrid"></div></div>
       <div class="card"><div class="toggle"><div><b>Hourly alarm</b><div class="muted">Refresh & notify hourly</div></div><div class="sw" id="alarmSw"></div></div>
         <div class="muted" id="lastupd" style="margin-top:12px">—</div><button class="btn sec" id="refreshBtn" style="margin-top:12px">↻ Refresh</button></div>
       <div class="card"><h3>By vendor — amount · commission (payin / payout)</h3><div id="vendorList"><div class="empty"><span class="spin"></span></div></div></div>
@@ -192,10 +200,19 @@
     <button data-view="risk"><span class="ic">🚨</span>Risk<span class="dot" id="riskdot" style="top:2px;right:16px;border-color:var(--card)"></span></button>
     <button data-view="flow"><span class="ic">📈</span>Flow</button>
     <button data-view="wallet"><span class="ic">🏦</span>Wallet</button>
-    <button data-view="lsp"><span class="ic">🏢</span>LSP</button>
-    <button data-view="reco"><span class="ic">📋</span>Reco</button>
-    <button data-view="settle"><span class="ic">🧾</span>Settle</button>
-    <button data-view="set"><span class="ic">⚙️</span>Settings</button>
+    <button data-more="1"><span class="ic">⋯</span>More</button>
+  </div>
+</div>
+<div id="moreSheet">
+  <div class="sheetcard">
+    <div class="sheethead"><div style="font-weight:800;font-size:16px">More</div>
+      <button class="iconbtn" id="moreClose" style="background:var(--line);color:var(--ink)">✕</button></div>
+    <div class="sheetbody"><div class="moregrid">
+      <button data-view="lsp"><span class="mi">🏢</span>LSP<small>Partner wallets</small></button>
+      <button data-view="reco"><span class="mi">📋</span>Reco<small>Reconciliation</small></button>
+      <button data-view="settle"><span class="mi">🧾</span>Settle<small>Settlement</small></button>
+      <button data-view="set"><span class="mi">⚙️</span>Settings<small>Alerts & account</small></button>
+    </div></div>
   </div>
 </div>
 <div id="sheet">

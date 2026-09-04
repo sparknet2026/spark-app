@@ -102,17 +102,25 @@ else {
   if(c.email && c.pw) setTimeout(()=>$("loginbtn").click(), 100);
 }
 
-// ---- Nav ----
-document.querySelectorAll(".nav button").forEach(b=>b.addEventListener("click",()=>{
-  document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
-  document.querySelectorAll(".view").forEach(v=>v.classList.remove("on")); $("v-"+b.dataset.view).classList.add("on");
-  if(b.dataset.view==="risk") renderRisk();
-  if(b.dataset.view==="wallet") loadWallet();
-  if(b.dataset.view==="flow") loadFlow();
-  if(b.dataset.view==="lsp") loadLsp();
-  if(b.dataset.view==="reco") initReco();
-  if(b.dataset.view==="settle") initSettle();
-}));
+// ---- Nav ---- (5 primary tabs + a "More" sheet for the rest)
+function loadView(view){
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("on")); $("v-"+view).classList.add("on");
+  document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("on"));
+  const pb=document.querySelector('.nav button[data-view="'+view+'"]');
+  (pb||document.querySelector('.nav button[data-more]')).classList.add("on");  // "More" stays lit for its items
+  if(view==="risk") renderRisk();
+  if(view==="wallet") loadWallet();
+  if(view==="flow") loadFlow();
+  if(view==="lsp") loadLsp();
+  if(view==="reco") initReco();
+  if(view==="settle") initSettle();
+}
+document.querySelectorAll(".nav button[data-view]").forEach(b=>b.addEventListener("click",()=>loadView(b.dataset.view)));
+const moreSheet=$("moreSheet");
+document.querySelector(".nav button[data-more]").addEventListener("click",()=>moreSheet.classList.add("on"));
+$("moreClose").addEventListener("click",()=>moreSheet.classList.remove("on"));
+moreSheet.addEventListener("click",e=>{ if(e.target===moreSheet) moreSheet.classList.remove("on"); });
+document.querySelectorAll("#moreSheet button[data-view]").forEach(b=>b.addEventListener("click",()=>{ moreSheet.classList.remove("on"); loadView(b.dataset.view); }));
 // Environment is fixed at login (its token is env-specific). To switch, sign out
 // and sign in to the other environment — this keeps the data from ever mixing.
 // Selected date for the whole dashboard (defaults to today, changeable via filter).
@@ -192,6 +200,7 @@ function render(c){
       gst+=x.GST; const v=(byV[x.Vendor]=byV[x.Vendor]||{name:x.VendorName,pinAmt:0,poutAmt:0,pinCom:0,poutCom:0});
       if(x.Mode==="Payin"){v.pinAmt+=x.Base;v.pinCom+=x.Total;} else {v.poutAmt+=x.Base;v.poutCom+=x.Total;} });
     _curCom=payin+payout; _curTx=payinTx+payoutTx;
+    renderProjection();
     $("totalCom").textContent=inr(payin+payout); $("payinCom").textContent=inr(payin); $("payoutCom").textContent=inr(payout); $("gstCom").textContent=inr(gst);
     $("payinTx").textContent=payinTx.toLocaleString("en-IN"); $("payoutTx").textContent=payoutTx.toLocaleString("en-IN"); $("totalTx").textContent=(payinTx+payoutTx).toLocaleString("en-IN");
     $("payinAmt").textContent=inr(payinAmt); $("payoutAmt").textContent=inr(payoutAmt); $("totalAmt").textContent=inr(payinAmt+payoutAmt);
@@ -497,6 +506,23 @@ async function loadReco(){
     }
   }
   await Promise.all(Array.from({length:Math.min(6,codes.length)},worker));
+}
+
+// ---- Commission projection (linear, at today's earning rate) ----
+const PROJ_HORIZONS=[
+  {k:"15 min",h:0.25},{k:"30 min",h:0.5},{k:"1 hour",h:1},{k:"2 hours",h:2},
+  {k:"6 hours",h:6},{k:"12 hours",h:12},{k:"24 hours",h:24},
+  {k:"1 month",h:24*30},{k:"3 months",h:24*90},{k:"1 year",h:24*365},
+];
+function renderProjection(){
+  const g=$("projGrid"); if(!g) return;
+  const now=new Date();
+  // hours of activity so far: elapsed today, or a full day for a past date. Floored so an early-morning sample can't explode.
+  let elapsed=(SELDATE===today())?(now.getHours()+now.getMinutes()/60):24;
+  elapsed=Math.max(elapsed,0.5);
+  const ratePerHr=_curCom/elapsed;
+  $("projRate").textContent=inr(ratePerHr);
+  g.innerHTML=PROJ_HORIZONS.map(x=>`<div class="projcell"><div class="pk">${x.k}</div><div class="pv">${inr(ratePerHr*x.h)}</div></div>`).join("");
 }
 
 // ---- Settlement (schedule-based: settled vs unsettled payin) ----
