@@ -110,9 +110,6 @@
         <div class="s" style="background:var(--ok-bg)"><div class="k" style="color:var(--ok)">Payin</div><div class="v" id="payinTx" style="color:var(--ok)">—</div><div class="k" id="payinAmt" style="color:var(--ok);text-transform:none;margin-top:2px">—</div></div>
         <div class="s" style="background:var(--info-bg)"><div class="k" style="color:var(--brand)">Payout</div><div class="v" id="payoutTx" style="color:var(--brand)">—</div><div class="k" id="payoutAmt" style="color:var(--brand);text-transform:none;margin-top:2px">—</div></div>
         <div class="s" style="background:var(--bg)"><div class="k" style="color:var(--muted)">Total</div><div class="v" id="totalTx">—</div><div class="k" id="totalAmt" style="color:var(--muted);text-transform:none;margin-top:2px">—</div></div></div></div>
-      <div class="card"><h3>Commission projection</h3>
-        <div class="muted" style="margin:-6px 0 10px">Estimated at today's rate · <span id="projRate">—</span>/hr. A guide, not a guarantee.</div>
-        <div id="projGrid" class="projgrid"></div></div>
       <div class="card"><div class="toggle"><div><b>Hourly alarm</b><div class="muted">Refresh & notify hourly</div></div><div class="sw" id="alarmSw"></div></div>
         <div class="muted" id="lastupd" style="margin-top:12px">—</div><button class="btn sec" id="refreshBtn" style="margin-top:12px">↻ Refresh</button></div>
       <div class="card"><h3>By vendor — amount · commission (payin / payout)</h3><div id="vendorList"><div class="empty"><span class="spin"></span></div></div></div>
@@ -180,6 +177,13 @@
         <select id="settleMerch" style="margin-bottom:10px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%"></select>
         <div id="settleList"><div class="empty"><span class="spin"></span></div></div></div>
     </div>
+    <div class="view" id="v-proj">
+      <div class="card hero"><h3>Commission projection · full day</h3><div class="big" id="projDay">—</div>
+        <div style="opacity:.85;font-size:13px;margin-top:8px">At today's rate · <span id="projRate">—</span>/hr</div></div>
+      <div class="card"><h3>At today's rate</h3>
+        <div class="muted" style="margin:-6px 0 10px">Estimated commission over each period. A guide, not a guarantee.</div>
+        <div id="projGrid" class="projgrid"></div></div>
+    </div>
     <div class="view" id="v-set">
       <div class="card"><h3>Account</h3>
         <div class="rowline"><div class="l">Signed in</div><div class="r" id="who" style="font-size:13px">—</div></div>
@@ -208,6 +212,7 @@
     <div class="sheethead"><div style="font-weight:800;font-size:16px">More</div>
       <button class="iconbtn" id="moreClose" style="background:var(--line);color:var(--ink)">✕</button></div>
     <div class="sheetbody"><div class="moregrid">
+      <button data-view="proj"><span class="mi">📈</span>Projection<small>Commission forecast</small></button>
       <button data-view="lsp"><span class="mi">🏢</span>LSP<small>Partner wallets</small></button>
       <button data-view="reco"><span class="mi">📋</span>Reco<small>Reconciliation</small></button>
       <button data-view="settle"><span class="mi">🧾</span>Settle<small>Settlement</small></button>

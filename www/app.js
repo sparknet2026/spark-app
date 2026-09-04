@@ -114,6 +114,7 @@ function loadView(view){
   if(view==="lsp") loadLsp();
   if(view==="reco") initReco();
   if(view==="settle") initSettle();
+  if(view==="proj") renderProjection();
 }
 document.querySelectorAll(".nav button[data-view]").forEach(b=>b.addEventListener("click",()=>loadView(b.dataset.view)));
 const moreSheet=$("moreSheet");
@@ -521,7 +522,8 @@ function renderProjection(){
   let elapsed=(SELDATE===today())?(now.getHours()+now.getMinutes()/60):24;
   elapsed=Math.max(elapsed,0.5);
   const ratePerHr=_curCom/elapsed;
-  $("projRate").textContent=inr(ratePerHr);
+  if($("projRate")) $("projRate").textContent=inr(ratePerHr);
+  if($("projDay")) $("projDay").textContent=inr(ratePerHr*24);
   g.innerHTML=PROJ_HORIZONS.map(x=>`<div class="projcell"><div class="pk">${x.k}</div><div class="pv">${inr(ratePerHr*x.h)}</div></div>`).join("");
 }
 
