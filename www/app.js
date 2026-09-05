@@ -2,6 +2,7 @@
 const $ = id => document.getElementById(id);
 const inr = n => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 });
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
+const tc = t => t==="Inclusive"?"var(--ok)":t==="Exclusive"?"var(--warn)":"var(--muted)"; // GST-treatment colour
 let alarmTimer = null, CACHE = { day: "", payins: [], payouts: [], rates: {} };
 function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("on"); setTimeout(()=>t.classList.remove("on"),2600); }
 
@@ -199,7 +200,7 @@ function render(c){
     let payin=0,payout=0,gst=0,payinTx=0,payoutTx=0,payinAmt=0,payoutAmt=0; const byV={};
     vc.forEach(x=>{ if(x.Mode==="Payin"){payin+=x.Total;payinTx+=x.Txns;payinAmt+=x.Base;} else {payout+=x.Total;payoutTx+=x.Txns;payoutAmt+=x.Base;}
       gst+=x.GST; const v=(byV[x.Vendor]=byV[x.Vendor]||{name:x.VendorName,pinAmt:0,poutAmt:0,pinCom:0,poutCom:0});
-      if(x.Mode==="Payin"){v.pinAmt+=x.Base;v.pinCom+=x.Total;} else {v.poutAmt+=x.Base;v.poutCom+=x.Total;} });
+      if(x.Mode==="Payin"){v.pinAmt+=x.Base;v.pinCom+=x.Total;v.pinRate=x.Rate;v.pinTreat=x.Treatment;} else {v.poutAmt+=x.Base;v.poutCom+=x.Total;v.poutRate=x.Rate;v.poutTreat=x.Treatment;} });
     _curCom=payin+payout; _curTx=payinTx+payoutTx;
     renderProjection();
     $("totalCom").textContent=inr(payin+payout); $("payinCom").textContent=inr(payin); $("payoutCom").textContent=inr(payout); $("gstCom").textContent=inr(gst);
@@ -210,7 +211,8 @@ function render(c){
     $("vendorList").innerHTML=items.length?items.map(([code,v])=>`<div class="rowline">
       <div class="l">${code} <small style="display:inline;color:var(--muted)">${v.name||""}</small>
         <small>trx <b>${inr(v.amt)}</b> · comm <b>${inr(v.com)}</b></small>
-        <small><span style="color:var(--ok)">in: ${inr(v.pinAmt)} / ${inr(v.pinCom)}</span> · <span style="color:var(--brand)">out: ${inr(v.poutAmt)} / ${inr(v.poutCom)}</span></small></div>
+        <small><span style="color:var(--ok)">in: ${inr(v.pinAmt)} / ${inr(v.pinCom)}</span> · <span style="color:var(--brand)">out: ${inr(v.poutAmt)} / ${inr(v.poutCom)}</span></small>
+        <small>GST — in ${v.pinAmt?`${v.pinRate||"—"} <b style="color:${tc(v.pinTreat)}">${v.pinTreat||"—"}</b>`:"—"} · out ${v.poutAmt?`${v.poutRate||"—"} <b style="color:${tc(v.poutTreat)}">${v.poutTreat||"—"}</b>`:"—"}</small></div>
       <div class="r">${inr(v.com)}</div></div>`).join(""):'<div class="empty">No data for '+dateLabel()+'.</div>';
     $("lastupd").textContent="Updated "+new Date().toLocaleTimeString();
     $("barsub").textContent=peday.envName()==="spark"?"Spark · today":"Peday · today"; $("curenv").textContent=peday.envName()==="spark"?"Spark":"Peday";
