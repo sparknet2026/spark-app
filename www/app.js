@@ -233,7 +233,7 @@ async function seedRunner(){
 }
 
 // Auto-refresh every 3s — live only (today), only on the dashboard, non-overlapping.
-let autoTimer=null, _curCom=0, _curTx=0;
+let autoTimer=null, _curCom=0, _curTx=0, _autoTick=0;
 // Lightweight "commission updated" ping — toast + optional device notification,
 // no siren/voice (that's reserved for risk).
 function updateNotify(title,body){
@@ -250,14 +250,19 @@ function startAuto(){ if(autoTimer||!autoOn()) return; paintAuto(); autoTimer=se
   _busy=true;
   try {
     const beforeCom=_curCom, beforeTx=_curTx;
-    const n = await refreshNew();          // light: only new txns
-    if(n===-1){ await loadData(); render(CACHE); }   // cache stale -> full load once
-    else if(n>0){                          // new txns -> re-render + signal the update
-      render(CACHE);
-      const dCom=_curCom-beforeCom, dTx=_curTx-beforeTx;
-      if(dTx>0){ flashCom(); updateNotify("Commission updated", `+${inr(dCom)} · ${dTx} new txn`+(dTx>1?"s":"")); }
+    _autoTick++;
+    // Every ~30s do a FULL re-read of the day so pending payins that have flipped
+    // to SUCCESS are picked up (the incremental pull skips already-seen ids, so it
+    // never catches a status change — that's why payin commission looked frozen).
+    if(_autoTick % 10 === 0){
+      await loadData(); render(CACHE);
+    } else {
+      const n = await refreshNew();        // light: only brand-new txns
+      if(n===-1){ await loadData(); render(CACHE); }   // cache stale -> full load once
+      else if(n>0){ render(CACHE); }
     }
-    // n===0 -> nothing changed, no work
+    const dCom=_curCom-beforeCom, dTx=_curTx-beforeTx;  // fire on new txns OR pending->success
+    if(dTx>0 || dCom>0.005){ flashCom(); updateNotify("Commission updated", `+${inr(Math.max(dCom,0))} · ${Math.max(dTx,0)} new txn`+(dTx===1?"":"s")); }
   } catch(e){ if(/sign in/i.test(e.message)){ peday.logout(); location.reload(); } }
   finally { _busy=false; }
 }, 3000); }
