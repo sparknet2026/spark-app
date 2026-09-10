@@ -177,6 +177,16 @@
         <select id="settleMerch" style="margin-bottom:10px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%"></select>
         <div id="settleList"><div class="empty"><span class="spin"></span></div></div></div>
     </div>
+    <div class="view" id="v-avail">
+      <div class="card hero"><h3>Available balance</h3><div class="big" id="availTotal">—</div>
+        <div style="opacity:.85;font-size:13px;margin-top:8px">Wallet + LSP wallet − unsettled − LSP payin unsettled</div></div>
+      <div class="card"><h3>Breakdown</h3>
+        <div class="rowline"><div class="l">Merchant wallet</div><div class="r" id="avWallet">—</div></div>
+        <div class="rowline"><div class="l">LSP wallet <small>payin + payout</small></div><div class="r" id="avLsp">—</div></div>
+        <div class="rowline"><div class="l" style="color:var(--warn)">− Unsettled (held)</div><div class="r" id="avUnsettled" style="color:var(--warn)">—</div></div>
+        <div class="rowline"><div class="l" style="color:var(--warn)">− LSP payin unsettled</div><div class="r" id="avLspUns" style="color:var(--warn)">—</div></div>
+        <div class="rowline"><div class="l"><b>Available</b></div><div class="r" id="avNet" style="font-weight:800">—</div></div></div>
+    </div>
     <div class="view" id="v-proj">
       <div class="card hero"><h3>Commission projection · full day</h3><div class="big" id="projDay">—</div>
         <div style="opacity:.85;font-size:13px;margin-top:8px">At today's rate · <span id="projRate">—</span>/hr</div></div>
@@ -212,6 +222,7 @@
     <div class="sheethead"><div style="font-weight:800;font-size:16px">More</div>
       <button class="iconbtn" id="moreClose" style="background:var(--line);color:var(--ink)">✕</button></div>
     <div class="sheetbody"><div class="moregrid">
+      <button data-view="avail"><span class="mi">💰</span>Available<small>Usable balance</small></button>
       <button data-view="proj"><span class="mi">📈</span>Projection<small>Commission forecast</small></button>
       <button data-view="lsp"><span class="mi">🏢</span>LSP<small>Partner wallets</small></button>
       <button data-view="reco"><span class="mi">📋</span>Reco<small>Reconciliation</small></button>

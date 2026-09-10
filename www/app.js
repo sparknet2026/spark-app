@@ -116,6 +116,7 @@ function loadView(view){
   if(view==="reco") initReco();
   if(view==="settle") initSettle();
   if(view==="proj") renderProjection();
+  if(view==="avail") loadAvail();
 }
 document.querySelectorAll(".nav button[data-view]").forEach(b=>b.addEventListener("click",()=>loadView(b.dataset.view)));
 const moreSheet=$("moreSheet");
@@ -509,6 +510,37 @@ async function loadReco(){
     }
   }
   await Promise.all(Array.from({length:Math.min(6,codes.length)},worker));
+}
+
+// ---- Available balance = wallet + LSP wallet − unsettled − LSP payin unsettled ----
+async function loadAvail(){
+  $("availTotal").textContent="…"; $("avNet").textContent="…";
+  try{
+    const codes=Object.keys(CACHE.rates||{});
+    // merchant wallets: total balance and unsettled (held)
+    const wres=await Promise.all(codes.map(c=>peday.balance(c)
+      .then(d=>({bal:logic.num(d.BALANCE), held:logic.num(d.UNSETTLEDBALANCE||d.LOCKED||0)}))
+      .catch(()=>({bal:0,held:0}))));
+    const walletTotal=wres.reduce((s,r)=>s+r.bal,0), unsettled=wres.reduce((s,r)=>s+r.held,0);
+    // LSP (Salora): collection (payin) wallet has balance + unsettled; payout wallet has wallet_balance
+    const [cc,pc]=await Promise.all([
+      peday.salora.collectionCompanies().catch(()=>[]),
+      peday.salora.payoutCompanies().catch(()=>[]),
+    ]);
+    const [colRes,payRes]=await Promise.all([
+      Promise.all(cc.map(n=>peday.salora.collectionWallet(n).then(d=>({bal:logic.num(d.balance),uns:logic.num(d.unsettled)})).catch(()=>({bal:0,uns:0})))),
+      Promise.all(pc.map(n=>peday.salora.payoutWallet(n).then(d=>({bal:logic.num(d.wallet_balance)})).catch(()=>({bal:0})))),
+    ]);
+    const lspWallet=colRes.reduce((s,r)=>s+r.bal,0)+payRes.reduce((s,r)=>s+r.bal,0);
+    const lspPayinUns=colRes.reduce((s,r)=>s+r.uns,0);
+    const net=walletTotal+lspWallet-unsettled-lspPayinUns;
+    $("avWallet").textContent=inr(walletTotal);
+    $("avLsp").textContent=inr(lspWallet);
+    $("avUnsettled").textContent="− "+inr(unsettled);
+    $("avLspUns").textContent="− "+inr(lspPayinUns);
+    $("avNet").textContent=inr(net);
+    $("availTotal").textContent=inr(net);
+  }catch(e){ $("availTotal").textContent="—"; $("avNet").textContent="—"; toast(e.message); }
 }
 
 // ---- Commission projection (linear, at today's earning rate) ----
