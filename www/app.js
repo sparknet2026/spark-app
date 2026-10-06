@@ -145,28 +145,33 @@ function doLookup(){
     rows.map(x=>`<div class="rowline"><div class="l">${x.name||x.vpa||x.mob||"—"}<small>${x.mob}${x.vpa?" · "+x.vpa:""} · ${(x.time||"").slice(0,16).replace("T"," ")} · ${x.mode}</small></div><div class="r">${inr(x.amt)}</div></div>`).join("");
 }
 
-// ---- Full load of the selected day (builds the seen-id sets for incremental) ----
-async function loadData(){
+// ---- Dashboard load: server-side aggregates, not raw rows. ----
+// The old path downloaded every transaction for the day (50k+ payin rows, ~20s)
+// just to sum commission on the device. The dashboard commission endpoints return
+// per-merchant commission + volume already aggregated (~1.5s each), and a size=1
+// query gives the success txn count without pulling rows — so a day that took
+// ~20s to open now takes ~2-3s.
+async function loadDash(){
   const d=SELDATE;
-  const [payins,payouts,merch] = await Promise.all([ peday.payins(d,d), peday.payouts(d,d), peday.merchants() ]);
-  const seenPin=new Set(payins.map(r=>r.GATEWAYTRANSACTIONID).filter(Boolean));
-  const seenPout=new Set(payouts.map(r=>r.GATEWAYTRANSACTIONID).filter(Boolean));
-  CACHE={ day:d, _env:peday.envName(), payins, payouts, rates: logic.merchantRates(merch), seenPin, seenPout };
+  const [pin,pout,pinCount,poutCount,merch] = await Promise.all([
+    peday.dailyByMerchant("payin", d),
+    peday.dailyByMerchant("payout", d),
+    peday.count(peday.PAYIN_PATH,  { from:d, to:d, paymentStatus:"SUCCESS" }).catch(()=>0),
+    peday.count(peday.PAYOUT_PATH, { from:d, to:d, paymentStatus:"SUCCESS" }).catch(()=>0),
+    peday.merchants(),
+  ]);
+  CACHE={ day:d, _env:peday.envName(), rates: logic.merchantRates(merch),
+          dash:{ pin, pout, pinCount, poutCount }, payins:null, payouts:null };
   return CACHE;
 }
-// ---- Incremental: pull only NEW txns since last check; merge into CACHE. ----
-async function refreshNew(){
-  if(!CACHE.seenPin || CACHE.day!==SELDATE || CACHE._env!==peday.envName()) return -1; // needs full load
+// ---- Raw rows for the Settle screen only, loaded on demand (needs per-txn
+// timestamps to bucket by settlement window). Kept off the app-open path. ----
+async function loadRaw(){
+  if(CACHE.payins && CACHE.day===SELDATE) return CACHE;
   const d=SELDATE;
-  const [np,no] = await Promise.all([
-    peday.fetchNew(peday.PAYIN_PATH, d, d, CACHE.seenPin),
-    peday.fetchNew(peday.PAYOUT_PATH, d, d, CACHE.seenPout),
-  ]);
-  np.forEach(r=>{ if(r.GATEWAYTRANSACTIONID) CACHE.seenPin.add(r.GATEWAYTRANSACTIONID); });
-  no.forEach(r=>{ if(r.GATEWAYTRANSACTIONID) CACHE.seenPout.add(r.GATEWAYTRANSACTIONID); });
-  if(np.length) CACHE.payins=np.concat(CACHE.payins);
-  if(no.length) CACHE.payouts=no.concat(CACHE.payouts);
-  return np.length+no.length;
+  const [payins,payouts] = await Promise.all([ peday.payins(d,d), peday.payouts(d,d) ]);
+  CACHE.payins=payins; CACHE.payouts=payouts;
+  return CACHE;
 }
 const dateLabel = () => SELDATE===today() ? "today" : SELDATE;
 
@@ -176,28 +181,36 @@ async function boot(silent){
   applyBoot();
   if(!silent) $("vendorList").innerHTML='<div class="empty"><span class="spin"></span></div>';
   try {
-    const c = await loadData();
+    const c = await loadDash();
     render(c);
   } catch(e){ if(!silent) $("vendorList").innerHTML='<div class="empty">'+e.message+'</div>'; if(/sign in/i.test(e.message)){ peday.logout(); location.reload(); } }
   finally { _busy=false; }
 }
 function render(c){
-    const vc=logic.vendorCommission(c.payins,c.payouts,c.rates);
-    let payin=0,payout=0,gst=0,payinTx=0,payoutTx=0,payinAmt=0,payoutAmt=0; const byV={};
-    vc.forEach(x=>{ if(x.Mode==="Payin"){payin+=x.Total;payinTx+=x.Txns;payinAmt+=x.Base;} else {payout+=x.Total;payoutTx+=x.Txns;payoutAmt+=x.Base;}
-      gst+=x.GST; const v=(byV[x.Vendor]=byV[x.Vendor]||{name:x.VendorName,pinAmt:0,poutAmt:0,pinCom:0,poutCom:0});
-      if(x.Mode==="Payin"){v.pinAmt+=x.Base;v.pinCom+=x.Total;v.pinRate=x.Rate;v.pinTreat=x.Treatment;} else {v.poutAmt+=x.Base;v.poutCom+=x.Total;v.poutRate=x.Rate;v.poutTreat=x.Treatment;} });
+    const d=c.dash||{pin:[],pout:[],pinCount:0,poutCount:0};
+    const N=logic.num, byV={};
+    const roll=(arr,key)=>arr.forEach(x=>{
+      const v=(byV[x.MERCHANTCODE]=byV[x.MERCHANTCODE]||{name:x.MERCHANTNAME||"",pinAmt:0,poutAmt:0,pinCom:0,poutCom:0});
+      if(key==="pin"){ v.pinAmt=N(x.SUCCESSAMOUNT); v.pinCom=N(x.COMMISSIONCHARGED); }
+      else { v.poutAmt=N(x.SUCCESSAMOUNT); v.poutCom=N(x.COMMISSIONCHARGED); }
+    });
+    roll(d.pin,"pin"); roll(d.pout,"pout");
+    const payin=d.pin.reduce((a,x)=>a+N(x.COMMISSIONCHARGED),0), payout=d.pout.reduce((a,x)=>a+N(x.COMMISSIONCHARGED),0);
+    const payinAmt=d.pin.reduce((a,x)=>a+N(x.SUCCESSAMOUNT),0), payoutAmt=d.pout.reduce((a,x)=>a+N(x.SUCCESSAMOUNT),0);
+    const payinTx=d.pinCount||0, payoutTx=d.poutCount||0;
+    // Commission charged is GST-inclusive for the main merchants, so the GST
+    // portion is comm*18/118. Shown as a guide; the commission totals are exact.
+    const gst=(payin+payout)*18/118;
     _curCom=payin+payout; _curTx=payinTx+payoutTx;
     $("totalCom").textContent=inr(payin+payout); $("payinCom").textContent=inr(payin); $("payoutCom").textContent=inr(payout); $("gstCom").textContent=inr(gst);
     $("payinTx").textContent=payinTx.toLocaleString("en-IN"); $("payoutTx").textContent=payoutTx.toLocaleString("en-IN"); $("totalTx").textContent=(payinTx+payoutTx).toLocaleString("en-IN");
     $("payinAmt").textContent=inr(payinAmt); $("payoutAmt").textContent=inr(payoutAmt); $("totalAmt").textContent=inr(payinAmt+payoutAmt);
     $("comTitle").textContent="Commission · "+dateLabel(); $("txnTitle").textContent="Transactions · "+dateLabel();
-    const items=Object.entries(byV).map(([c,v])=>[c,{...v,amt:v.pinAmt+v.poutAmt,com:v.pinCom+v.poutCom}]).sort((a,b)=>b[1].amt-a[1].amt);
+    const items=Object.entries(byV).map(([c,v])=>[c,{...v,amt:v.pinAmt+v.poutAmt,com:v.pinCom+v.poutCom}]).filter(x=>x[1].amt>0||x[1].com>0).sort((a,b)=>b[1].amt-a[1].amt);
     $("vendorList").innerHTML=items.length?items.map(([code,v])=>`<div class="rowline">
       <div class="l">${code} <small style="display:inline;color:var(--muted)">${v.name||""}</small>
         <small>trx <b>${inr(v.amt)}</b> · comm <b>${inr(v.com)}</b></small>
-        <small><span style="color:var(--ok)">in: ${inr(v.pinAmt)} / ${inr(v.pinCom)}</span> · <span style="color:var(--brand)">out: ${inr(v.poutAmt)} / ${inr(v.poutCom)}</span></small>
-        <small>GST — in ${v.pinAmt?`${v.pinRate||"—"} <b style="color:${tc(v.pinTreat)}">${v.pinTreat||"—"}</b>`:"—"} · out ${v.poutAmt?`${v.poutRate||"—"} <b style="color:${tc(v.poutTreat)}">${v.poutTreat||"—"}</b>`:"—"}</small></div>
+        <small><span style="color:var(--ok)">in: ${inr(v.pinAmt)} / ${inr(v.pinCom)}</span> · <span style="color:var(--brand)">out: ${inr(v.poutAmt)} / ${inr(v.poutCom)}</span></small></div>
       <div class="r">${inr(v.com)}</div></div>`).join(""):'<div class="empty">No data for '+dateLabel()+'.</div>';
     $("lastupd").textContent="Updated "+new Date().toLocaleTimeString();
     $("barsub").textContent="Spark · today";
@@ -223,21 +236,14 @@ function startAuto(){ if(autoTimer||!autoOn()) return; paintAuto(); autoTimer=se
   try {
     const beforeCom=_curCom, beforeTx=_curTx;
     _autoTick++;
-    // Every ~30s do a FULL re-read of the day so pending payins that have flipped
-    // to SUCCESS are picked up (the incremental pull skips already-seen ids, so it
-    // never catches a status change — that's why payin commission looked frozen).
-    if(_autoTick % 10 === 0){
-      await loadData(); render(CACHE);
-    } else {
-      const n = await refreshNew();        // light: only brand-new txns
-      if(n===-1){ await loadData(); render(CACHE); }   // cache stale -> full load once
-      else if(n>0){ render(CACHE); }
-    }
+    // Re-read the server aggregate each tick — it's light (~2s) and already
+    // reflects pending->success flips, so no incremental bookkeeping is needed.
+    await loadDash(); render(CACHE);
     const dCom=_curCom-beforeCom, dTx=_curTx-beforeTx;  // fire on new txns OR pending->success
     if(dTx>0 || dCom>0.005){ flashCom(); updateNotify("Commission updated", `+${inr(Math.max(dCom,0))} · ${Math.max(dTx,0)} new txn`+(dTx===1?"":"s")); }
   } catch(e){ if(/sign in/i.test(e.message)){ peday.logout(); location.reload(); } }
   finally { _busy=false; }
-}, 3000); }
+}, 15000); }
 function stopAuto(){ if(autoTimer) clearInterval(autoTimer); autoTimer=null; }
 
 // ---- Risk ----
@@ -544,12 +550,17 @@ const SETTLE_SCHED=[
 ];
 function settleDT(date,at,dayOff){ const [h,m]=at.split(":").map(Number); const dt=new Date(date+"T00:00:00"); dt.setDate(dt.getDate()+dayOff); dt.setHours(h,m,0,0); return dt; }
 let SETTLEINIT=false;
-function initSettle(){
+async function initSettle(){
   const sel=$("settleMerch");
   if(!SETTLEINIT){
     SETTLEINIT=true;
     sel.innerHTML='<option value="ALL">All merchants</option>'+Object.keys(CACHE.rates||{}).map(m=>`<option value="${m}">${(CACHE.rates[m]&&CACHE.rates[m].name)||m}</option>`).join("");
     sel.onchange=loadSettle;
+  }
+  // Settle needs the raw rows (hourly buckets); load them on demand, not on open.
+  if(!CACHE.payins || CACHE.day!==SELDATE){
+    $("settleList").innerHTML='<div class="empty"><span class="spin"></span></div>';
+    try { await loadRaw(); } catch(e){ $("settleList").innerHTML='<div class="empty">'+e.message+'</div>'; return; }
   }
   loadSettle();
 }

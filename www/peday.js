@@ -143,8 +143,12 @@ const peday = {
   ledger: (m) => apiGet(`/api/v1/admin/wallets/merchant/${m}/transactions`).then(d => Array.isArray(d) ? d : (d.CONTENT || d)),
   ledgerAll: (m) => fetchAll(`/api/v1/admin/wallets/merchant/${m}/transactions`, {}),
   balance: (m) => apiGet(`/api/v1/admin/wallets/merchant/${m}`),
-  // Per-merchant daily volume (SUCCESSAMOUNT) — one light call per date.
+  // Per-merchant daily commission (COMMISSIONCHARGED) + volume (SUCCESSAMOUNT),
+  // aggregated server-side — one light call per mode per date (vs downloading
+  // every transaction to sum on the device).
   dailyByMerchant: (mode, date) => apiGet(`/api/v1/admin/dashboard/${mode}/commission`, { date }).then(d => Array.isArray(d) ? d : (d.CONTENT || [])),
+  // Cheap row count for a filter: ask for one row and read the page total.
+  count: (path, params) => apiGet(path, { ...params, page: 0, size: 1 }).then(d => d.TOTALELEMENTS ?? d.totalElements ?? (Array.isArray(d) ? d.length : 0)),
   get email() { return localStorage.getItem("peday_email") || ""; },
 };
 window.peday = peday;
