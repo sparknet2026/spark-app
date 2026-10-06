@@ -2,15 +2,16 @@
    Works in the native app (Capacitor) which is not subject to browser CORS.
    The logged-in user's own token is used; nothing is hardcoded. */
 const ENVS = {
-  peday: "https://dashboard.peday.money",
   spark: "https://dashboard.sparkpay.in",
 };
-let BASE = localStorage.getItem("peday_base") || ENVS.peday;
+// Single environment: Spark. (The old Peday host was retired.) Any stale
+// peday_base saved by an older build is ignored so it can't resurrect it.
+let BASE = ENVS.spark;
 let TOKEN = localStorage.getItem("peday_token") || "";
 const SUCCESS = new Set(["SUCCESS", "SUCCESSFUL", "COMPLETED", "CREDITED"]);
 
-function setEnv(name) { BASE = ENVS[name] || ENVS.peday; localStorage.setItem("peday_base", BASE); }
-function envName() { return BASE === ENVS.spark ? "spark" : "peday"; }
+function setEnv() { BASE = ENVS.spark; localStorage.setItem("peday_base", BASE); }
+function envName() { return "spark"; }
 
 async function login(email, password) {
   const r = await fetch(BASE + "/api/v1/auth/admin/login", {
@@ -39,7 +40,14 @@ function isAuthed() { return !!TOKEN; }
 async function apiGet(path, params, _retry) {
   const url = new URL(BASE + path);
   Object.entries(params || {}).forEach(([k, v]) => v !== "" && v != null && url.searchParams.set(k, v));
-  const r = await fetch(url, { headers: { Authorization: "Bearer " + TOKEN, Accept: "application/json" } });
+  // Timeout so one slow/hung call can't freeze the whole load (the app would
+  // otherwise sit on the splash and look like it "won't open").
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 30000);
+  let r;
+  try { r = await fetch(url, { headers: { Authorization: "Bearer " + TOKEN, Accept: "application/json" }, signal: ctrl.signal }); }
+  catch (e) { throw new Error(e.name === "AbortError" ? "Request timed out — check connection" : e.message); }
+  finally { clearTimeout(t); }
   if (r.status === 401) {
     // Token lives only 15 min — silently re-login with saved creds and retry once.
     if (!_retry) {
@@ -53,16 +61,37 @@ async function apiGet(path, params, _retry) {
 }
 
 // Walk every page of a CONTENT-wrapped list endpoint.
+// Fetch page 0 first to learn the page count, then pull the rest in parallel
+// (capped) instead of one-at-a-time — a big-day load that was ~4 sequential
+// round trips becomes ~2, so the dashboard shows all data much sooner.
+const PAGE_SIZE = 10000, MAX_CONCURRENT = 5;
+const _rowsOf = d => Array.isArray(d) ? d : (d.CONTENT || d.content || []);
+
 async function fetchAll(path, params) {
-  const out = []; let page = 0;
-  for (let i = 0; i < 200; i++) {
-    const d = await apiGet(path, { ...params, page, size: 5000 });
-    const rows = Array.isArray(d) ? d : (d.CONTENT || d.content || []);
-    out.push(...rows);
-    const total = d.TOTALPAGES ?? d.totalPages;
-    const last = d.LAST ?? d.last;
-    if (last === true || (total != null && page >= total - 1) || rows.length < 5000) break;
-    page++;
+  const first = await apiGet(path, { ...params, page: 0, size: PAGE_SIZE });
+  const out = _rowsOf(first);
+  const total = first.TOTALPAGES ?? first.totalPages;
+
+  // No page-count header, or everything fit on page 0 → done / sequential fallback.
+  if (total == null) {
+    if (out.length < PAGE_SIZE) return out;
+    let page = 1;
+    for (let i = 0; i < 200; i++) {
+      const r = _rowsOf(await apiGet(path, { ...params, page, size: PAGE_SIZE }));
+      out.push(...r);
+      if (r.length < PAGE_SIZE) break; page++;
+    }
+    return out;
+  }
+  if (total <= 1) return out;
+
+  // Remaining pages in parallel, in capped batches to avoid hammering the API.
+  const pages = [];
+  for (let p = 1; p < total; p++) pages.push(p);
+  for (let i = 0; i < pages.length; i += MAX_CONCURRENT) {
+    const batch = pages.slice(i, i + MAX_CONCURRENT);
+    const res = await Promise.all(batch.map(p => apiGet(path, { ...params, page: p, size: PAGE_SIZE })));
+    res.forEach(d => out.push(..._rowsOf(d)));
   }
   return out;
 }

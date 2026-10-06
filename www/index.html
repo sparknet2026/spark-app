@@ -83,12 +83,12 @@
     <div class="logo">₹</div>
     <h1>Spark Pay</h1>
     <p>Sign in with your Spark Pay admin account</p>
+    <input type="hidden" id="lenv" value="spark">
     <div class="loginerr" id="loginerr"></div>
-    <div class="fld"><label>Environment</label><select id="lenv"><option value="spark">Spark</option><option value="peday">Peday</option></select></div>
     <div class="fld"><label>Email</label><input id="lu" type="email" placeholder="admin@…" autocomplete="username"></div>
     <div class="fld"><label>Password</label><input id="lp" type="password" autocomplete="current-password"></div>
     <button class="btn" id="loginbtn">Sign in</button>
-    <p style="margin:14px 0 0;font-size:11px">Your credentials go straight to peday. Nothing is stored on any server.</p>
+    <p style="margin:14px 0 0;font-size:11px">Your credentials go straight to Spark Pay. Nothing is stored on any server.</p>
   </div>
 </div>
 
@@ -114,26 +114,6 @@
         <div class="muted" id="lastupd" style="margin-top:12px">—</div><button class="btn sec" id="refreshBtn" style="margin-top:12px">↻ Refresh</button></div>
       <div class="card"><h3>By vendor — amount · commission (payin / payout)</h3><div id="vendorList"><div class="empty"><span class="spin"></span></div></div></div>
     </div>
-    <div class="view" id="v-risk">
-      <div class="card">
-        <h3>Lookup — mobile or UPI (SUCCESS only)</h3>
-        <div style="display:flex;gap:8px">
-          <input id="lookupQ" placeholder="mobile number or UPI (@…)" style="flex:1;padding:11px 12px;border:1px solid var(--line);border-radius:11px;background:var(--bg);color:var(--ink);font-size:15px">
-          <button class="btn" id="lookupBtn" style="width:auto;margin:0;padding:11px 16px">Search</button>
-        </div>
-        <div id="lookupRes"><div class="muted" style="margin-top:12px">Enter a mobile number or UPI to count its successful transactions.</div></div>
-      </div>
-      <div class="card">
-        <div class="toggle" style="margin-bottom:10px"><h3 style="margin:0">🚨 Risk flags</h3><span class="pill" id="riskCount">—</span></div>
-        <div class="seg" id="riskseg"><button data-rm="all" class="on">All</button><button data-rm="payin">Payin</button><button data-rm="payout">Payout</button></div>
-        <div id="riskList"><div class="empty"><span class="spin"></span></div></div></div>
-    </div>
-    <div class="view" id="v-flow">
-      <div class="seg" id="flowseg"><button data-fm="payin" class="on">Payin</button><button data-fm="payout">Payout</button></div>
-      <div class="card"><h3 id="flowTitle">Merchant flow · payin</h3>
-        <div class="muted" style="margin:-6px 0 10px">Merchants with a sudden jump in volume, or many failures in a row.</div>
-        <div id="flowList"><div class="empty"><span class="spin"></span></div></div></div>
-    </div>
     <div class="view" id="v-wallet">
       <div class="card hero"><h3>Total wallet balance</h3><div class="big" id="walletTotal">—</div>
         <div class="split"><div class="s"><div class="k">Available</div><div class="v" id="walletAvail">—</div></div>
@@ -153,20 +133,6 @@
         <div class="muted" style="margin:-6px 0 10px">Collection (payin) &amp; payout wallet balance · Salora panel.</div>
         <div id="lspList"><div class="empty"><span class="spin"></span></div></div></div>
     </div>
-    <div class="view" id="v-reco">
-      <div class="card"><h3>Reconciliation</h3>
-        <div class="muted" style="margin:-6px 0 10px">Opening + Payin − Payout − Commission = Balance · from wallet ledger.</div>
-        <div style="display:flex;gap:8px">
-          <label style="flex:1;font-size:12px;color:var(--muted)">From<input type="date" id="recoFrom" style="width:100%;margin-top:3px;padding:9px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)"></label>
-          <label style="flex:1;font-size:12px;color:var(--muted)">To<input type="date" id="recoTo" style="width:100%;margin-top:3px;padding:9px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)"></label>
-        </div>
-        <button class="btn" id="recoRun" style="margin-top:10px">Run reco</button></div>
-      <div class="card hero"><h3>Net · all merchants</h3><div class="big" id="recoBal">—</div>
-        <div class="split"><div class="s"><div class="k">Payin</div><div class="v" id="recoPayin">—</div></div>
-        <div class="s"><div class="k">Payout</div><div class="v" id="recoPayout">—</div></div>
-        <div class="s"><div class="k">Commission</div><div class="v" id="recoComm">—</div></div></div></div>
-      <div class="card"><h3>By merchant</h3><div id="recoList"><div class="empty">Pick dates and run reco.</div></div></div>
-    </div>
     <div class="view" id="v-settle">
       <div class="card hero"><h3>Settlement · <span id="settleDate">today</span></h3><div class="big" id="settleTot">—</div>
         <div class="split"><div class="s"><div class="k">Settled</div><div class="v" id="settleDone">—</div></div>
@@ -177,27 +143,9 @@
         <select id="settleMerch" style="margin-bottom:10px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%"></select>
         <div id="settleList"><div class="empty"><span class="spin"></span></div></div></div>
     </div>
-    <div class="view" id="v-avail">
-      <div class="card hero"><h3>Available balance</h3><div class="big" id="availTotal">—</div>
-        <div style="opacity:.85;font-size:13px;margin-top:8px">Wallet + LSP wallet − unsettled − LSP payin unsettled</div></div>
-      <div class="card"><h3>Breakdown</h3>
-        <div class="rowline"><div class="l">Merchant wallet</div><div class="r" id="avWallet">—</div></div>
-        <div class="rowline"><div class="l">LSP wallet <small>payin + payout</small></div><div class="r" id="avLsp">—</div></div>
-        <div class="rowline"><div class="l" style="color:var(--warn)">− Unsettled (held)</div><div class="r" id="avUnsettled" style="color:var(--warn)">—</div></div>
-        <div class="rowline"><div class="l" style="color:var(--warn)">− LSP payin unsettled</div><div class="r" id="avLspUns" style="color:var(--warn)">—</div></div>
-        <div class="rowline"><div class="l"><b>Available</b></div><div class="r" id="avNet" style="font-weight:800">—</div></div></div>
-    </div>
-    <div class="view" id="v-proj">
-      <div class="card hero"><h3>Commission projection · full day</h3><div class="big" id="projDay">—</div>
-        <div style="opacity:.85;font-size:13px;margin-top:8px">At today's rate · <span id="projRate">—</span>/hr</div></div>
-      <div class="card"><h3>At today's rate</h3>
-        <div class="muted" style="margin:-6px 0 10px">Estimated commission over each period. A guide, not a guarantee.</div>
-        <div id="projGrid" class="projgrid"></div></div>
-    </div>
     <div class="view" id="v-set">
       <div class="card"><h3>Account</h3>
         <div class="rowline"><div class="l">Signed in</div><div class="r" id="who" style="font-size:13px">—</div></div>
-        <div class="rowline"><div class="l">Environment</div><div class="r" id="curenv">Peday</div></div>
         <div class="rowline"><div class="l">Device ID</div><div class="r muted" id="deviceId" style="font-size:12px">—</div></div></div>
       <div class="card"><h3>Alerts · this device</h3>
         <div class="toggle"><div><b>Notifications</b></div><div class="sw" id="notifSw"></div></div>
@@ -211,9 +159,8 @@
   </div>
   <div class="nav">
     <button class="on" data-view="dash"><span class="ic">🏠</span>Home</button>
-    <button data-view="risk"><span class="ic">🚨</span>Risk<span class="dot" id="riskdot" style="top:2px;right:16px;border-color:var(--card)"></span></button>
-    <button data-view="flow"><span class="ic">📈</span>Flow</button>
     <button data-view="wallet"><span class="ic">🏦</span>Wallet</button>
+    <button data-view="settle"><span class="ic">🧾</span>Settle</button>
     <button data-more="1"><span class="ic">⋯</span>More</button>
   </div>
 </div>
@@ -222,11 +169,7 @@
     <div class="sheethead"><div style="font-weight:800;font-size:16px">More</div>
       <button class="iconbtn" id="moreClose" style="background:var(--line);color:var(--ink)">✕</button></div>
     <div class="sheetbody"><div class="moregrid">
-      <button data-view="avail"><span class="mi">💰</span>Available<small>Usable balance</small></button>
-      <button data-view="proj"><span class="mi">📈</span>Projection<small>Commission forecast</small></button>
       <button data-view="lsp"><span class="mi">🏢</span>LSP<small>Partner wallets</small></button>
-      <button data-view="reco"><span class="mi">📋</span>Reco<small>Reconciliation</small></button>
-      <button data-view="settle"><span class="mi">🧾</span>Settle<small>Settlement</small></button>
       <button data-view="set"><span class="mi">⚙️</span>Settings<small>Alerts & account</small></button>
     </div></div>
   </div>

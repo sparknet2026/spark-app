@@ -82,7 +82,6 @@ $("loginbtn").addEventListener("click", async () => {
   const btn=$("loginbtn"), err=$("loginerr"); err.style.display="none";
   // Unlock audio on this user gesture so the alarm can sound from later background checks.
   try{ _ac=_ac||new(window.AudioContext||window.webkitAudioContext)(); _ac.resume(); }catch(e){}
-  peday.setEnv($("lenv").value);
   btn.disabled=true; btn.textContent="Signing in…";
   try {
     await peday.login($("lu").value.trim(), $("lp").value);
@@ -99,7 +98,6 @@ else {
   const c=peday.savedCreds();
   if(c.email) $("lu").value=c.email;
   if(c.pw) $("lp").value=c.pw;
-  if($("lenv")) $("lenv").value=peday.envName();
   if(c.email && c.pw) setTimeout(()=>$("loginbtn").click(), 100);
 }
 
@@ -109,14 +107,9 @@ function loadView(view){
   document.querySelectorAll(".nav button").forEach(x=>x.classList.remove("on"));
   const pb=document.querySelector('.nav button[data-view="'+view+'"]');
   (pb||document.querySelector('.nav button[data-more]')).classList.add("on");  // "More" stays lit for its items
-  if(view==="risk") renderRisk();
   if(view==="wallet") loadWallet();
-  if(view==="flow") loadFlow();
   if(view==="lsp") loadLsp();
-  if(view==="reco") initReco();
   if(view==="settle") initSettle();
-  if(view==="proj") renderProjection();
-  if(view==="avail") loadAvail();
 }
 document.querySelectorAll(".nav button[data-view]").forEach(b=>b.addEventListener("click",()=>loadView(b.dataset.view)));
 const moreSheet=$("moreSheet");
@@ -134,14 +127,6 @@ $("bell").addEventListener("click",()=>{ $("belldot").style.display="none"; noti
 $("sheetClose").onclick=()=>$("sheet").classList.remove("on");
 $("sheet").onclick=e=>{ if(e.target.id==="sheet") $("sheet").classList.remove("on"); };
 
-// Risk flow filter (All / Payin / Payout)
-document.querySelectorAll("#riskseg button").forEach(b=>b.addEventListener("click",()=>{
-  document.querySelectorAll("#riskseg button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
-  RISKMODE=b.dataset.rm; renderRisk();
-}));
-// Lookup: count a mobile number or UPI's SUCCESSFUL transactions (loaded date).
-$("lookupBtn").addEventListener("click", doLookup);
-$("lookupQ").addEventListener("keydown", e=>{ if(e.key==="Enter") doLookup(); });
 function doLookup(){
   const q=($("lookupQ").value||"").trim().toLowerCase();
   if(!q){ $("lookupRes").innerHTML='<div class="muted" style="margin-top:12px">Enter a mobile number or UPI.</div>'; return; }
@@ -203,7 +188,6 @@ function render(c){
       gst+=x.GST; const v=(byV[x.Vendor]=byV[x.Vendor]||{name:x.VendorName,pinAmt:0,poutAmt:0,pinCom:0,poutCom:0});
       if(x.Mode==="Payin"){v.pinAmt+=x.Base;v.pinCom+=x.Total;v.pinRate=x.Rate;v.pinTreat=x.Treatment;} else {v.poutAmt+=x.Base;v.poutCom+=x.Total;v.poutRate=x.Rate;v.poutTreat=x.Treatment;} });
     _curCom=payin+payout; _curTx=payinTx+payoutTx;
-    renderProjection();
     $("totalCom").textContent=inr(payin+payout); $("payinCom").textContent=inr(payin); $("payoutCom").textContent=inr(payout); $("gstCom").textContent=inr(gst);
     $("payinTx").textContent=payinTx.toLocaleString("en-IN"); $("payoutTx").textContent=payoutTx.toLocaleString("en-IN"); $("totalTx").textContent=(payinTx+payoutTx).toLocaleString("en-IN");
     $("payinAmt").textContent=inr(payinAmt); $("payoutAmt").textContent=inr(payoutAmt); $("totalAmt").textContent=inr(payinAmt+payoutAmt);
@@ -216,21 +200,9 @@ function render(c){
         <small>GST — in ${v.pinAmt?`${v.pinRate||"—"} <b style="color:${tc(v.pinTreat)}">${v.pinTreat||"—"}</b>`:"—"} · out ${v.poutAmt?`${v.poutRate||"—"} <b style="color:${tc(v.poutTreat)}">${v.poutTreat||"—"}</b>`:"—"}</small></div>
       <div class="r">${inr(v.com)}</div></div>`).join(""):'<div class="empty">No data for '+dateLabel()+'.</div>';
     $("lastupd").textContent="Updated "+new Date().toLocaleTimeString();
-    $("barsub").textContent=peday.envName()==="spark"?"Spark · today":"Peday · today"; $("curenv").textContent=peday.envName()==="spark"?"Spark":"Peday";
-    checkRisk(c);
+    $("barsub").textContent="Spark · today";
 }
-function applyBoot(){ paintS(); paintAuto(); if($("selDate")&&!$("selDate").value) $("selDate").value=SELDATE; if($("deviceId")) $("deviceId").textContent=devId(); if($("who")) $("who").textContent=peday.email; if(getS("alarm")) startAlarm(); startAuto(); seedRunner(); }
-// Seed the background task with credentials so it can run risk checks when the app
-// is closed (~every 10-15 min, OS-limited). Uses the saved login; no server needed.
-async function seedRunner(){
-  try{
-    const BR=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.BackgroundRunner;
-    if(!BR) return;
-    const c=peday.savedCreds(); if(!c.email||!c.pw) return;
-    await BR.dispatchEvent({ label:"money.peday.commission.risk", event:"saveCreds",
-      details:{ email:c.email, pw:c.pw, base:peday.ENVS[peday.envName()] } });
-  }catch(e){}
-}
+function applyBoot(){ paintS(); paintAuto(); if($("selDate")&&!$("selDate").value) $("selDate").value=SELDATE; if($("deviceId")) $("deviceId").textContent=devId(); if($("who")) $("who").textContent=peday.email; if(getS("alarm")) startAlarm(); startAuto(); }
 
 // Auto-refresh every 3s — live only (today), only on the dashboard, non-overlapping.
 let autoTimer=null, _curCom=0, _curTx=0, _autoTick=0;
@@ -331,10 +303,6 @@ function showFlag(k){
 
 // ---- Trx Flow: per-merchant consecutive failures + hourly volume spike ----
 let FLOWMODE="payin";
-document.querySelectorAll("#flowseg button").forEach(b=>b.addEventListener("click",()=>{
-  document.querySelectorAll("#flowseg button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
-  FLOWMODE=b.dataset.fm; loadFlow();
-}));
 function lastNDates(end, n){ const out=[], d=new Date(end+"T00:00:00"); for(let i=0;i<n;i++){ out.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()-1); } return out; }
 function renderFlow(rows){
   const M=FLOWMODE; // "payin" | "payout"
