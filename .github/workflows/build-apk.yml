@@ -27,8 +27,13 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Accept Android SDK licenses
+        # GitHub's ubuntu runners already ship the Android SDK. The
+        # android-actions/setup-android action started failing after a runner
+        # image update (it requests a cmdline-tools version that mismatches the
+        # preinstalled one and then hangs on an interactive licence prompt), so
+        # we skip it and just accept licences on the preinstalled SDK.
+        run: yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
 
       - name: Install dependencies
         run: npm install
